@@ -9,7 +9,7 @@
 // To change your local configuration, edit config.php
 
 // Current engine version
-$CONF['version'] = '1.1';
+$CONF['version'] = '0.1';
 
 // If this is 0, public interfaces will be unavailable
 $CONF['enabled'] = 1;
