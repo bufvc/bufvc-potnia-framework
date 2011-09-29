@@ -1,0 +1,21 @@
+#! /usr/bin/php -q
+<?php
+// $Id$
+// Query log processor
+// Phil Hansen, 26 May 09
+// BUFVC Potnia copyright 2011, BUFVC et al. See LICENSE for licensing information (GPL3). See http://potnia.org, http://bufvc.ac.uk
+
+require_once(dirname(realpath(__FILE__)) . '/../web/include.php');
+
+$usage = "Usage: get_query_stats [file]\n";
+$usage .= "If no file is specified stdin will be used.\n";
+
+// get file
+if (@$argv[1] == '-h')
+    die($usage);
+else if (@$argv[1])
+    $filename = $argv[1];
+
+$parser = new QueryLogStats();
+$parser->parse(@$filename);
+?>

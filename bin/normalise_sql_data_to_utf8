@@ -1,0 +1,66 @@
+#! /usr/bin/php -q
+<?php
+// $Id$
+// Helper script for the convert_database_to_utf8 script
+// Phil Hansen, 24 Feb 2010
+// BUFVC Potnia copyright 2011, BUFVC et al. See LICENSE for licensing information (GPL3). See http://potnia.org, http://bufvc.ac.uk
+
+// Processes a sql dump file and normalises utf8 data
+//  - normalise apostrophes
+//  - normalise open single quotes
+
+
+$usage = "Usage: normalise_sql_data_to_utf8 [file]\n";
+
+// get file
+if (empty($argv[1]) || @$argv[1] == '-h')
+    die($usage);
+else if (@$argv[1])
+    $filename = $argv[1];
+
+if (!$original = @fopen($filename, "r"))
+    {
+    echo "Cannot open file ($filename)\n";
+    exit;
+    }
+if (!$new_file = @fopen($filename.'_temp', "w"))
+    {
+    echo "Cannot open file (".$filename."_temp)\n";
+    exit;
+    }
+
+// loop through the file
+while (!feof($original))
+    {
+    $line = fgets($original);
+    // find and parse INSERT lines
+    if (strpos($line, "INSERT") === 0)
+        process_line($line);
+    fwrite($new_file, $line);
+    }
+
+fclose($original);
+fclose($new_file);
+
+rename($filename.'_temp', $filename);
+
+// Processes an INSERT line
+function process_line(&$line)
+    {
+    // split the line up so we only parse values
+    $offset = strpos($line, ") VALUES (");
+    $start = substr($line, 0, $offset+9);
+    $line = substr($line, $offset+9);
+
+    // normalise apostrophes
+    $match = "\\\\'|\xE2\x80\x98|\xE2\x80\x9A|\xE2\x80\x9B|\x60|\xC2\xB4|".
+             "\xCC\x80|\xCC\x81|\xE2\x80\xB2|".chr(145)."|".chr(146);
+    $line = preg_replace("/([A-Za-z0-9])(".$match.")/ie", "'\\1'.\"\xE2\x80\x99\".''", $line);
+    // normalise open single quotes
+    $match = "\\\\'|\xE2\x80\x99|\xE2\x80\x9A|\xE2\x80\x9B|\x60|\xC2\xB4|".
+             "\xCC\x80|\xCC\x81|\xE2\x80\xB2|".chr(145)."|".chr(146);
+    $line = preg_replace("/( )(".$match.")([A-Za-z0-9])/ie", "'\\1'.\"\xE2\x80\x98\".'\\3'.''", $line);
+    
+    $line = $start.$line;
+    }
+?>

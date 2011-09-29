@@ -1,0 +1,11 @@
+syntax: glob
+etc/config.php
+*.bak
+*~
+*.log
+*_log
+*.orig
+*.rej
+modules/*/install/*
+.DS_Store
+docs/doxygen

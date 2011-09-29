@@ -1,0 +1,25 @@
+* Templates folder
+This folder (and the templates/ folders inside each module) contain files for displaying content to end-users.
+
+Template files can be edited by designers. It should not be necessary for designers to edit files outside 
+the templates directories.
+
+The main design constraints are:
+ - It should be easy for designers to find and edit the files, which means the majority of files 
+   are plain PHP
+ - Performance 
+ 
+ The main techniques used are:
+ 
+ 1. Include a template file directly
+ 
+ 2. Look for template files in the module-specific directories and fall back to the global template
+ 
+ 3. Use functions or objects
+ 
+ Functions are used for repetitious code such as displaying drop-down lists in queries.
+ 
+ Objects are used where performance is an issue, e.g. in the results list where including a PHP file 100 times 
+ would impact performance.
+ 
+

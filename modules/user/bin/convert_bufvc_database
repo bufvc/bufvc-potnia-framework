@@ -1,0 +1,18 @@
+#! /bin/bash
+# Convert BUFVC user database in-place
+# James Fryer, 21 Oct 09
+# BUFVC Potnia copyright 2011, BUFVC et al. See LICENSE for licensing information (GPL3). See http://potnia.org, http://bufvc.ac.uk
+
+basedir=$(cd $(dirname $0)/..; pwd)
+cd $basedir
+
+if [ "$1" == "-nopurge" ]; then NOPURGE=1; shift; fi
+if [ -z "$1" ]; then echo "Usage: $(basename $0) database-name"; exit; fi
+DATABASE=$1
+
+# Purge, then convert
+if [ -z "$NOPURGE" ]; then mysql $DATABASE < sql/purge_old_database.sql; fi
+mysql $DATABASE < sql/convert_bufvc.sql
+
+# PHP script converts the user data
+php -q $basedir/bin/convert_bufvc_database.php $DATABASE

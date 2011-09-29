@@ -1,0 +1,129 @@
+#! /bin/bash
+# $Id$
+# Module management script
+# James Fryer, 3 Feb 09
+# BUFVC Potnia copyright 2011, BUFVC et al. See LICENSE for licensing information (GPL3). See http://potnia.org, http://bufvc.ac.uk
+
+# Get the project directory
+basedir=$(cd $(dirname $0)/..;pwd)
+cd $basedir
+
+VERBOSE=
+
+function usage()
+    {
+    cat << _EOT_
+$(basename $0): Install/manage modules
+Usage: $(basename $0) [options] module-name [database-name]
+Options:
+    -s Use sample data (default is to run install script)
+    -f Force database creation
+    -m "args" Args to send to MySQL
+    -u Add user database
+    -v Be verbose
+    -h This message
+_EOT_
+    }
+    
+function message()
+    {
+    if [ ! -z $VERBOSE ]; then echo $1; fi
+    }
+
+function error()
+    {
+    echo "ERROR: $*" >& 2
+    exit 1
+    }
+
+# Process command line options
+while getopts sfuvhm: option 
+do 
+    case $option in 
+    h)  
+        usage
+        exit 2
+    ;; 
+    s ) 
+        USE_SAMPLE_DATA=Y
+    ;; 
+    f ) 
+        OVERWRITE_DB=Y
+    ;; 
+    u ) 
+        USER_DB=Y
+    ;; 
+    v ) 
+        ((VERBOSE++))
+    ;; 
+    m ) 
+        MYSQL_ARGS=$OPTARG
+    ;; 
+    esac 
+done
+shift $(($OPTIND - 1))
+
+if [ -z $1 ]; then
+    usage
+    exit 2
+fi
+
+MODULE=$1
+if [ -z $2 ]; then
+    DATABASE=$MODULE
+else
+    DATABASE=$2
+fi
+
+message "Installing module: $MODULE"
+
+# Get module directory
+MODULE_DIR=$basedir/modules/$MODULE
+if [ ! -d $MODULE_DIR ]; then 
+    error "No such module: $MODULE"
+fi
+
+# Get database schema
+SCHEMA=$MODULE_DIR/sql/schema.sql
+if [ ! -f $SCHEMA ]; then 
+    error "Schema not found: $SCHEMA"
+fi
+
+# Delete existing database if -f option set
+if [ ! -z $OVERWRITE_DB ]; then
+    message "Deleting database: $DATABASE"
+    mysqladmin $MYSQL_ARGS -f drop $DATABASE &> /dev/null
+fi
+
+# Create the database
+message "Creating database: $DATABASE"
+if ! mysqladmin $MYSQL_ARGS create $DATABASE 2>/dev/null; then
+    error "Can't create database $DATABASE; use -f to force deletion of existing database"
+    exit 2
+fi
+
+# Add the schema
+message "Adding schema: $SCHEMA"
+mysql $MYSQL_ARGS -D $DATABASE < $SCHEMA
+
+# Add the user schema and data
+# TEMP
+if [ ! -z $USER_DB ]; then
+    message "Adding user data"
+    mysql $MYSQL_ARGS -D $DATABASE < $basedir/sql/user_schema.sql 
+    mysql $MYSQL_ARGS -D $DATABASE < $basedir/sql/user_unit_test_data.sql 
+fi
+
+# By default, run the install script if there is one, otherwise load the 
+# sample data if any. If the -s option is set always load the sample data
+# The install script is called with the database name as its first argument
+# BUT not all modules will respect this...
+INSTALL_SCRIPT=$MODULE_DIR/bin/install
+SAMPLE_DATA=$MODULE_DIR/sql/sample_data.sql
+if [ -z "$USE_SAMPLE_DATA" -a -f $INSTALL_SCRIPT ]; then 
+    message "Running install script: $INSTALL_SCRIPT"
+    $INSTALL_SCRIPT $DATABASE
+elif [ -f $SAMPLE_DATA ]; then 
+    message "Adding sample data: $SAMPLE_DATA"
+    mysql $MYSQL_ARGS -D $DATABASE < $SAMPLE_DATA
+fi

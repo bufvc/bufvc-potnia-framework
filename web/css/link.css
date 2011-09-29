@@ -1,0 +1,78 @@
+html,body
+{
+    height:100%;
+    overflow:hidden;
+}
+
+#link-header
+{
+    position:relative;
+    padding:6px;
+    height:47px;
+    overflow:visible;
+    border-bottom:1px solid #333;
+} 
+
+#link-header .record-title
+{
+    height:auto;
+}
+
+#link-header a.remove-frame
+{
+    position:absolute;
+    top:5px;
+    right:0;
+} 
+
+#link-header .bufvc
+{
+   font-size:12px;
+}
+
+#link-header .link-nav
+{
+    position:absolute;
+    top:5px;
+    left:135px;
+    right:15px;
+} 
+
+#link-header .link-nav .nav-message,
+#link-header .link-nav .nav-message a
+{
+    background:transparent;
+    border:0;
+} 
+
+#link-header .link-nav .nav-message
+{
+    text-align:center;
+    width:60%;
+    margin:0 auto;
+    display:block;
+    padding-top:6px;
+}
+
+#link-header .link-nav .site-summary
+{
+    width:480px;
+    background-color:rgb(235,237,239);
+    background-image:url('../components/bg_body.png'); background-repeat:repeat-x; background-position:0% 0%;
+    padding:10px;
+	border:1px solid rgb(195,199,204);
+	-moz-border-radius:8px; 
+	-webkit-border-radius:8px;
+	-khtml-border-radius:8px;
+	border-radius: 8px;
+}
+
+#frame, iframe
+{
+    width:100%;
+    height:100%;
+}
+iframe
+{
+    overflow:auto;
+}

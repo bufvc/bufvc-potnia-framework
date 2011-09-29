@@ -1,0 +1,1203 @@
+#! /usr/bin/php -q
+<?php
+// $Id$
+// Convert Hermes database from old version (bufvc_core) to new schema
+// Phil Hansen, 30 Mar 09
+// BUFVC Potnia copyright 2011, BUFVC et al. See LICENSE for licensing information (GPL3). See http://potnia.org, http://bufvc.ac.uk
+
+$CONF['module'] = 'hermes';
+require_once(dirname(realpath(__FILE__)) . '../../../../web/include.php');
+
+$usage = "Usage: convert_database [-v] <old_db> <new_db>\n";
+$usage .= "-v    Verbose: show status messages\n";
+if (count($argv) < 3)
+    {
+    die($usage);
+    }
+
+// check for "verbose" flag
+if ($argv[1] == "-v")
+    {
+    $showStatus = true;
+    // Get databases
+    $old_db_name = $argv[2];
+    $new_db_name = $argv[3];
+    }
+else
+    {
+    $showStatus = false;
+    // Get databases
+    $old_db_name = $argv[1];
+    $new_db_name = $argv[2];
+    }
+
+$module = Module::load('hermes');
+$ds = $module->get_datasource();
+db_init($CONF['db_user'], $CONF['db_pass'], $CONF['db_server'], $new_db_name, FALSE);
+
+// limit value to break large queries on
+$QUERY_LIMIT = 10000;
+
+// DO Keyword import
+// add temporary old_id field
+db_query("ALTER TABLE Keyword ADD old_id int unsigned NOT NULL");
+db_query("ALTER TABLE Keyword ADD INDEX (old_id)");
+
+$sql = "INSERT INTO Keyword (`title`, `date_created`, `hermes_id`, `old_id`) ";
+$sql .= "SELECT k.term, k.data_created, TRIM(k.legacy_id), k.id ";
+$sql .= "FROM $old_db_name.keyword AS k ";
+$sql .= "JOIN $old_db_name.relation r ON r.id2 = k.id AND r.id2_entity = 'keyword' ";
+$sql .= "JOIN $old_db_name.title t ON t.id = r.id1 ";
+$sql .= "AND t.data_set IN('av','avpart','av,av_shk') ";
+$sql .= "WHERE k.data_set = 'hrmthes' ";
+$sql .= "GROUP BY k.id";
+db_query($sql);
+
+// DO Category import
+// add temporary old_id field
+db_query("ALTER TABLE Category ADD old_id int unsigned NOT NULL");
+db_query("ALTER TABLE Category ADD INDEX (old_id)");
+
+$sql = "INSERT INTO Category (`title`, `date_created`, `hermes_id`, `old_id`) ";
+$sql .= "SELECT k.term, k.data_created, TRIM(k.legacy_id), k.id ";
+$sql .= "FROM $old_db_name.keyword AS k ";
+$sql .= "JOIN $old_db_name.relation r ON r.id2 = k.id AND r.id2_entity = 'keyword' ";
+$sql .= "JOIN $old_db_name.title t ON t.id = r.id1 ";
+$sql .= "AND t.data_set IN('av','avpart','av,av_shk') ";
+$sql .= "WHERE k.data_set = 'hrmsubj' ";
+$sql .= "GROUP BY k.id";
+db_query($sql);
+
+// DO Language import
+// don't add English (Great Britain) - those titles will use English
+$sql = "INSERT INTO Language (`id`, `title`) ";
+$sql .= "SELECT value, label FROM $old_db_name.val_language AS l ";
+$sql .= "JOIN $old_db_name.title t ON t.language = l.value ";
+$sql .= "AND t.data_set IN('av','av,av_shk') ";
+$sql .= "WHERE l.value <> 'en-gb' ";
+$sql .= "GROUP BY l.value";
+db_query($sql);
+
+// DO Country import
+$sql = "INSERT INTO Country (`id`, `title`) ";
+$sql .= "SELECT value, label FROM $old_db_name.val_country AS c ";
+$sql .= "JOIN $old_db_name.title_av t_av ON FIND_IN_SET(c.value, t_av.country) ";
+$sql .= "JOIN $old_db_name.title t ON t.id = t_av.id ";
+$sql .= "AND t.data_set IN('av','av,av_shk') ";
+$sql .= "GROUP BY c.value";
+db_query($sql);
+
+// DO TitleFormat import
+// limited by client request
+$sql = "INSERT INTO TitleFormat (`title`) ";
+$sql .= "SELECT label FROM $old_db_name.val_title_type ";
+$sql .= "WHERE value in (15, 8, 22, 23, 18, 19) ";
+$sql .= "ORDER BY label ";
+db_query($sql);
+
+// change format names
+$sql = "UPDATE TitleFormat SET title='Audio' WHERE title='Audio recording'";
+db_query($sql);
+$sql = "UPDATE TitleFormat SET title='Television' WHERE title='Television broadcast'";
+db_query($sql);
+
+// create array map for use in title import
+// new formats: 1 Audio, 2 Film, 3 Multimedia, 4 Radio, 5 Television, 6 Video
+$validFormats = Array('15', '8', '22', '23', '18', '19', '2', '3', '4', '6', '9', '14', '16', '17', '20', '21');
+$formatMap = Array('15'=>'1', '8'=>'2', '22'=>'3', '23'=>'4', '18'=>'5', '19'=>'6', '2'=>'3', '3'=>'1',
+                   '4'=>'3', '6'=>'6', '9'=>'2', '14'=>'3', '16'=>'3', '17'=>'3', '20'=>'6', '21'=>'6');
+
+// DO OnlineFormat import
+$sql = "INSERT INTO OnlineFormat (`id`, `title`) VALUES ";
+$sql .= "(1, 'Streamed'),(2, 'Download'),(3, 'Streamed/Download') ";
+db_query($sql);
+
+$online_format_map = Array('Streamed'=>1, 'Download'=>2, 'StreamedDownload'=>3, 'DownloadStreamed'=>3);
+
+// DO OrganisationType import
+$sql = "INSERT INTO OrganisationType (`id`, `title`) ";
+$sql .= "SELECT value, label FROM $old_db_name.val_org_type ";
+db_query($sql);
+
+// DO OrganisationRelation import
+$sql = "INSERT INTO OrganisationRelation (`id`, `title`) ";
+$sql .= "SELECT value, label FROM $old_db_name.val_org_relation ";
+db_query($sql);
+
+if ($showStatus)
+    print("Starting Title import...\n");
+
+// DO Title import
+// add temporary old_id field
+db_query("ALTER TABLE Title ADD old_id int unsigned NOT NULL");
+db_query("ALTER TABLE Title ADD INDEX (old_id)");
+
+// prepare title data query
+$sql = "SELECT t.*, tav.*, lt.Audio_format, lt.Audio_Price, ";
+$sql .= "lt.Audio_Sale_Hire, lt.Audio_time, lt.Audio_Year, lt.Recovered_3, ";
+$sql .= "lt.Recovered_7, lt.cd_rom_price, lt.Recovered_11, lt.CDROM_time, ";
+$sql .= "lt.cd_rom_year, lt.Recovered_6, lt.Recovered_2, lt.DVD_format2, ";
+$sql .= "lt.dvd_price, lt.Recovered_10, lt.DVD_time, lt.dvd_year, ";
+$sql .= "lt.Recovered_4, lt.Recovered_8, lt.film_price, lt.Film_Sale_Hire, ";
+$sql .= "lt.Film_time, lt.film_year, lt.Slide_Tape_Format, lt.Slide_Tape_Price, ";
+$sql .= "lt.Slide_Tape_Sale_Hire, lt.Slide_Tape_number, lt.Slide_Tape_Year, lt.Recovered_5, ";
+$sql .= "lt.Recovered_1, lt.video_price, lt.Recovered_9, lt.Video_time, lt.Video_year, ";
+$sql .= "lt.On_line_format, lt.On_line_url, lt.On_line_price ";
+$sql .= "FROM $old_db_name.title t ";
+$sql .= "JOIN $old_db_name.title_av tav on tav.id = t.id ";
+$sql .= "JOIN $old_db_name.legacy_AV_titles lt on lt.AV_ID = t.legacy_id ";
+$sql .= "WHERE t.data_set IN ('av','av,av_shk') ";
+
+// set list of title fields to ignore from general processing (e.g. special cases)
+$ignore = Array('video_colour', 'audio_silent', 'audio_silentmusic', 
+                'type', 'country', 'date1', 'created1', 'language',
+                'title', 'alternative', 'title_series',
+                'legacy_physical_description', 'legacy_price', 'availability',
+                'On_line_format', 'On_line_url', 'Recovered_2', 
+                'DVD_format2', 'Recovered_6', 'data_set', 'ref');
+
+$titleFields = Array('title', 'alternative', 'title_series');
+
+// prepare distribution media map
+$distribution_media = Array(
+    'Audio' => Array(
+        'mandatory'=>'Audio_format',
+        'format'=>'Audio_format',
+        'price'=>'Audio_Price',
+        'availability'=>'Audio_Sale_Hire',
+        'length'=>'Audio_time',
+        'year'=>'Audio_Year',
+        ),
+    'CD-ROM' => Array(
+        'mandatory'=>Array('Recovered_3','Recovered_7'),
+        'format'=>'Recovered_3',
+        'price'=>'cd_rom_price',
+        'availability'=>'Recovered_11',
+        'length'=>'CDROM_time',
+        'year'=>'cd_rom_year',
+        ),
+    'DVD' => Array(
+        'mandatory'=>'Recovered_6',
+        'format'=>'Recovered_2',
+        'price'=>'dvd_price',
+        'availability'=>'Recovered_10',
+        'length'=>'DVD_time',
+        'year'=>'dvd_year',
+        ),
+    'Film' => Array(
+        'mandatory'=>Array('Recovered_4','Recovered_8'),
+        'format'=>'Recovered_4',
+        'price'=>'film_price',
+        'availability'=>'Film_Sale_Hire',
+        'length'=>'Film_time',
+        'year'=>'film_year',
+        ),
+    'Slide' => Array(
+        'mandatory'=>'Slide_Tape_Format',
+        'format'=>'Slide_Tape_Format',
+        'price'=>'Slide_Tape_Price',
+        'availability'=>'Slide_Tape_Sale_Hire',
+        'length'=>'Slide_Tape_number',
+        'year'=>'Slide_Tape_Year',
+        ),
+    'VHS' => Array(
+        'mandatory'=>'Recovered_5',
+        'format'=>'Recovered_1',
+        'price'=>'video_price',
+        'availability'=>'Recovered_9',
+        'length'=>'Video_time',
+        'year'=>'Video_year',
+        ),
+    );
+$distribution_media_rank = Array('DVD'=>6, 'VHS'=>5, 'Film'=>4, 'Slide'=>3, 'CD-ROM'=>2, 'Audio'=>1);
+
+// break up the title query by looping over different subsets of the query
+$done = false;
+$current = 0;
+while (!$done)
+    {
+    $new_sql = $sql . " LIMIT $current, $QUERY_LIMIT ";
+    $result = db_get_all($new_sql, MDB2_FETCHMODE_ASSOC);
+    $current += $QUERY_LIMIT;
+    if (count($result) < $QUERY_LIMIT)
+        $done = true;
+    
+    // import each title
+    foreach ($result as $record)
+        {
+        // do general field cleanup
+        foreach ($record as $key=>$item)
+            {
+            $item = trim($item);
+            $item = trim($item, "\x00..\x1F"); // ascii control characters from 0-31
+            
+            if (in_array($key, $ignore))
+                { /* do nothing */ }
+            else if (empty($item))
+                $item = NULL;
+            else
+                $item = "'" . addslashes($item) . "'";
+            
+            $record[$key] = $item;
+            }
+            
+        // get date_released
+        if (empty($record['date1']) && !empty($record['created1']))
+            {
+            $date_released = $record['created1'];
+            $record['created1'] = NULL;
+            }
+        else if (empty($record['date1']))
+            $date_released = NULL;
+        else
+            $date_released = $record['date1'];
+        
+        // get date_production
+        if (!empty($record['created1']) && $record['created1'] != $record['date1'])
+            $date_production = $record['created1'];
+        else
+            $date_production = NULL;
+        
+        // get date - order of priority: date_released, date_production
+        if (!empty($date_released))
+            $date = "'" . $date_released . "'";
+        else if (!empty($date_production))
+            $date = "'" . $date_production . "'";
+        else
+            $date = "NULL";
+        
+        // prepare dates for storage
+        if (is_null($date_released))
+            $date_released = "NULL";
+        else
+            $date_released = "'" . substr($date_released, 0, 4) . "'"; // parse year
+        
+        if (is_null($date_production))
+            $date_production = "NULL";
+        else
+            $date_production = "'" . substr($date_production, 0, 4) . "'"; // parse year
+        
+        // get silent flag
+        $silent = ($record['audio_silent'] == '1' || $record['audio_silentmusic'] == '1') ? 1 : 0;
+        
+        // do titles
+        foreach ($titleFields as $title_name)
+            {
+            if (empty($record[$title_name]))
+                $record[$title_name] = NULL;
+            else
+                $record[$title_name] = "'" . addslashes($ds->title_case(trim($record[$title_name]))) . "'";
+            }
+        
+        // check hermes title
+        if (is_null($record['title']))
+            $record['title'] = "''";
+        
+        // check language - convert "en-gb" to "en"
+        if (empty($record['language']))
+            $record['language'] = NULL;
+        else if ($record['language'] == "en-gb")
+            $record['language'] = "'en'";
+        else
+            $record['language'] = "'" . $record['language'] . "'";
+        
+        // get online info
+        if (!empty($record['On_line_format']))
+            $record['On_line_format'] = $online_format_map[$record['On_line_format']];
+        else
+            $record['On_line_format'] = NULL;
+        if (!empty($record['On_line_url']) && preg_match('/^(http|www)/', $record['On_line_url']))
+            $record['On_line_url'] = "'" . addslashes(trim($record['On_line_url'])) . "'";
+        else
+            $record['On_line_url'] = NULL;
+        if (is_null($record['On_line_url']) && is_null($record['On_line_format']))
+            $record['is_online'] = 0;
+        else
+            $record['is_online'] = 1;
+        
+        // get distribtuion info
+        $distribution = NULL;
+        $distribution_values = Array();
+        if (empty($record['availability']))
+            $record['availability'] = NULL;
+        else
+            {
+            $distribution_values[] = $record['availability'];
+            $record['availability'] = "'" . addslashes(trim($record['availability'])) . "'";
+            }
+        if (empty($record['legacy_physical_description']))
+            $record['legacy_physical_description'] = NULL;
+        else
+            {
+            $distribution_values[] = $record['legacy_physical_description'];
+            $record['legacy_physical_description'] = "'" . addslashes(trim($record['legacy_physical_description'])) . "'";
+            }
+        if (empty($record['legacy_price']))
+            $record['legacy_price'] = NULL;
+        else
+            {
+            $distribution_values[] = $record['legacy_price'];
+            $record['legacy_price'] = "'" . addslashes(trim($record['legacy_price'])) . "'";
+            }
+        if (count($distribution_values) > 0)
+            $distribution = "'" . addslashes(join(', ', $distribution_values)) . "'";
+        
+        // get viewfinder issue
+        $viewfinder = 0;
+        if (!empty($record['ref']))
+            {
+            $tmp = explode(' ', $record['ref']);
+            foreach ($tmp as $key=>$token)
+                {
+                $token = trim(strtolower($token));
+                // special case, some records have a space in between the VF and the number e.g. 'VF 25'
+                // if we find a 'vf' by itself, append the data from the next token
+                if ($token == 'vf' && isset($tmp[$key+1]) && strpos($tmp[$key+1], 'vf') !== 0)
+                    {
+                    $token .= $tmp[$key+1];
+                    $token = trim(strtolower($token));
+                    }
+                if (strpos($token, 'vf') === 0)
+                    {
+                    // remove certain characters from the end of the viewfinder number
+                    $token = rtrim($token, 't');
+                    $token = rtrim($token, '+');
+                    $token = rtrim($token, ',');
+                    $token = rtrim($token, '?');
+                    $viewfinder = substr($token, 2);
+                    if (!is_numeric($viewfinder))
+                        print("Error: viewfinder value not numeric: $viewfinder\n");
+                    break;
+                    }
+                }
+            }
+        // prepare the ref field for storage
+        if (empty($record['ref']))
+            $record['ref'] = NULL;
+        else
+            $record['ref'] = "'" . addslashes($record['ref']) . "'";
+        
+        // flag shakespeare records
+        $shakespeare = ($record['data_set'] == 'av,av_shk') ? 1 : 0;
+        
+        // prepare NULLs
+        foreach ($record as $key=>$item)
+            {
+            if (is_null($item))
+                $record[$key] = "NULL";
+            }
+        
+        $sql_i = "INSERT INTO Title (`title`, `alt_title`, `title_series`, `subtitle`, `date_created`, " .
+                "`date`, `date_released`, `date_production`, " .
+                "`description`, `is_colour`, `is_silent`, `language_id`, " .
+                "`online_url`, `online_price`, `online_format_id`, `is_online`, " .
+                "`notes`, `notes_documentation`, `notes_uses`, " .
+                "`distributors_ref`, `isbn`, `shelf_ref`, `ref`, `physical_description`, `price`, `availability`, " .
+                "`viewfinder`, `is_shakespeare`, `hermes_id`, `director`, `producer`, `misc`, `old_id`) VALUES (" .
+                "$record[title], $record[alternative], " .
+                "$record[title_series], $record[title_sub], $record[data_created], " .
+                "$date, $date_released, $date_production, " .
+                "$record[description], $record[video_colour], $silent, $record[language], " .
+                "$record[On_line_url], $record[On_line_price], $record[On_line_format], $record[is_online], " .
+                "$record[notes], $record[doc_notes], $record[uses], " .
+                "$record[distributors_ref], $record[isbn], $record[shelf_ref], " .
+                "$record[ref], $record[legacy_physical_description], " .
+                "$record[legacy_price], $record[availability], " .
+                "$viewfinder, $shakespeare, $record[legacy_id], '', '', '', $record[id])";
+        db_query($sql_i);
+        
+        // retrieve the new id
+        $result_temp = db_get_one("SELECT id FROM Title WHERE old_id=$record[id]");
+        $id = $result_temp['id'];
+        
+        // DO TitleFormat link
+        if (!empty($record['type']))
+            {
+            $newFormats = Array();
+            $formats = array_unique(explode(",", $record['type']));
+            foreach($formats as $format)
+                {
+                if (in_array($format, $validFormats) && !in_array($formatMap[$format], $newFormats))
+                    {
+                    db_query("INSERT INTO TitleFormatLink (`title_id`, `format_id`) VALUES ($id, $formatMap[$format])");
+                    $newFormats[] = $formatMap[$format]; // store the format
+                    }
+                }
+            }
+        
+        // DO TitleCountry link
+        if (!empty($record['country']))
+            {
+            $countries = array_unique(explode(",", $record['country']));
+            foreach($countries as $country)
+                db_query("INSERT INTO TitleCountry (`title_id`, `country_id`) VALUES ($id, '$country')");
+            }
+        
+        // DO DistributionMedia
+        $current_rank = 0;
+        foreach ($distribution_media as $type=>$media)
+            {
+            // check for data, if the mandatory data item is not found then continue loop
+            if ($type == 'VHS' && !preg_match('/(VHS|vhs)/', $record[$media['mandatory']]))
+                continue;
+            else if (is_array($media['mandatory']))
+                {
+                if ($record[$media['mandatory'][0]] == "NULL" && $record[$media['mandatory'][1]] == "NULL")
+                    continue;
+                }
+            else if (empty($record[$media['mandatory']]) || $record[$media['mandatory']] == "NULL")
+                continue;
+            
+            if ($type == 'DVD')
+                {
+                // handle format fields
+                $format = Array();
+                if (!empty($record[$media['format']]))
+                    $format[] = $record[$media['format']];
+                if (!empty($record['DVD_format2']))
+                    $format[] = $record['DVD_format2'];
+                if (!empty($record['Recovered_6']) && $record['Recovered_6'] != 'DVD')
+                    $format[] = $record['Recovered_6'];
+                
+                if (count($format) > 0)
+                    $record[$media['format']] = "'" . addslashes(join(', ', $format)) . "'";
+                else
+                    $record[$media['format']] = "NULL";
+                }
+            
+            if ($distribution_media_rank[$type] > $current_rank)
+                {
+                $distribution_values = Array();
+                if ($record[$media['availability']] != "NULL")
+                    $distribution_values[] = substr($record[$media['availability']], 1, -1);
+                $text = $type;
+                $temp = Array();
+                if ($record[$media['format']] != "NULL")
+                    $temp[] = substr($record[$media['format']], 1, -1);
+                if ($record[$media['length']] != "NULL")
+                    $temp[] = substr($record[$media['length']], 1, -1);
+                if (count($temp) > 0)
+                    $text .= ' (' . join(', ', $temp) . ')';
+                $distribution_values[] = $text;
+                if ($record[$media['price']] != "NULL")
+                    $distribution_values[] = substr($record[$media['price']], 1, -1);
+                $distribution = "'" . join(', ', $distribution_values) . "'";
+                $current_rank = $distribution_media_rank[$type];
+                }
+            
+            $sql_i = "INSERT INTO DistributionMedia (`title_id`, `type`, `format`, `price`, " .
+                    "`availability`, `length`, `year`) VALUES (" .
+                    "$id, '$type', ".$record[$media['format']].", ".$record[$media['price']].", " .
+                    $record[$media['availability']].", ".$record[$media['length']].", ".
+                    $record[$media['year']].")";
+            db_query($sql_i);
+            }
+        
+        if (!is_null($distribution))
+            db_query("UPDATE Title SET distribution=$distribution WHERE id=$id");
+        }
+    unset($result);
+    }
+
+if ($showStatus)
+    print("Starting Section import...\n");
+
+// DO Section import
+// add temporary old_id field
+db_query("ALTER TABLE Section ADD old_id int unsigned NOT NULL");
+db_query("ALTER TABLE Section ADD INDEX (old_id)");
+
+// get section data
+$sql = "SELECT t.*, tavp.*, Title.id AS title_id FROM $old_db_name.title t ";
+$sql .= "JOIN $old_db_name.title_avpart tavp on tavp.id = t.id ";
+$sql .= "JOIN $old_db_name.relation r on r.id2 = t.id AND r.description = 'Parent' ";
+$sql .= "JOIN Title on Title.old_id = r.id1 ";
+$sql .= "WHERE t.data_set = 'avpart' ";
+$sql .= "AND tavp.legacy_contributor_name = '' ";
+$sql .= "AND t.title <> '' ";
+$sql .= "ORDER BY title_id";
+$result = db_get_all($sql, MDB2_FETCHMODE_ASSOC);
+
+// set list of title fields to ignore from general processing (e.g. special cases)
+$ignore = Array('video_colour', 'audio_silent', 'audio_silentmusic', 'duration');
+$title_id = -1;
+$part_number = NULL;
+$number_before = false;
+$number_after = false;
+
+// import each section
+for ($i = 0; $i < count($result); $i++)
+    {
+    $record = $result[$i];
+    // special case - check for empty title or title with only control characters (like vertical tab)
+    $title = trim($record['title']);
+    $title = trim($title, "\x00..\x1F"); // ascii control characters from 0-31
+    if (empty($title))
+        continue;
+
+    // new title
+    if ($title_id != $record['title_id'])
+        {
+        // reset flags
+        $title_id = $record['title_id'];
+        $part_number = NULL;
+        $number_before = false;
+        $number_after = false;
+        }
+    
+    // check titles for part number order (before or after)
+    if (!$number_before && !$number_after)
+        {
+        if (is_numeric($record['title']))
+            $number_before = true;
+        else if ($i+1 < count($result) && is_numeric($result[$i+1]['title']))
+            $number_after = true;
+        }
+    
+    // part numbers come before
+    // check if we are storing part number
+    if ($number_before && is_null($part_number))
+        {
+        $part_number = $record['title'];
+        continue; // loop immediately
+        }
+    // part number already stored, use it
+    else if ($number_before && !empty($part_number) && empty($record['number_in_series']))
+        {
+        $record['number_in_series'] = $part_number;
+        $part_number = NULL;
+        }
+    
+    // part numbers come after
+    // this is title, look at next record for part number
+    if ($number_after && is_null($part_number) && empty($record['number_in_series']))
+        {
+        $part_number = $result[$i+1]['title'];
+        $record['number_in_series'] = $part_number;
+        }
+    // this is part number record, loop to next record
+    else if ($number_after && !empty($part_number) && is_numeric($record['title']))
+        {
+        $part_number = NULL;
+        continue;
+        }
+    
+    // do general field cleanup
+    foreach ($record as $key=>$item)
+        {
+        $item = trim($item);
+        $item = trim($item, "\x00..\x1F"); // ascii control characters from 0-31
+        
+        if (in_array($key, $ignore))
+            { /* do nothing */ }
+        else if (empty($item))
+            $item = NULL;
+        else
+            $item = "'" . addslashes($item) . "'";
+        
+        $record[$key] = $item;
+        }
+    
+    // get duration (convert to seconds)
+    $duration = "NULL"; // default
+    if (strpos($record['duration'], ':') !== FALSE)
+        {
+        $tokens = explode(':', $record['duration']);
+        if (count($tokens) == 2) // special case, values like '1:13' = 1 hour 13 minutes
+            $duration = intval($tokens[0]) * 60 * 60 + intval($tokens[1]) * 60;
+        else if (count($tokens) == 3) // special case, values like '50:00:00' = 50 minutes
+            $duration = intval($tokens[0]) * 60;
+        }
+    else if (is_numeric($record['duration']))
+        $duration = intval($record['duration']) * 60;
+    
+    // get silent flag
+    $silent = ($record['audio_silent'] == '1' || $record['audio_silentmusic'] == '1') ? 1 : 0;
+    
+    // check title
+    if (is_null($record['title']))
+        $record['title'] = "''";
+    
+    // prepare NULLs
+    foreach ($record as $key=>$item)
+        {
+        if (is_null($item))
+            $record[$key] = "NULL";
+        }
+    
+    $sql = "INSERT INTO Section (`title_id`, `title`, `description`, `notes`, " .
+            "`duration`, `is_colour`, `is_silent`, " .
+            "`distributors_ref`, `isbn`, `number_in_series`, " .
+            "`hermes_id`, `old_id`) VALUES (" .
+            "$record[title_id], $record[title], $record[description], " .
+            "$record[notes], $duration, $record[video_colour], $silent, " .
+            "$record[distributors_ref], $record[isbn], $record[number_in_series], " .
+            "$record[legacy_id], $record[id])";
+    db_query($sql);
+    }
+unset($result);
+
+// add descriptions to sections (where the description was present on another record)
+// get section data
+$sql = "SELECT t.description, Title.id AS title_id FROM $old_db_name.title t ";
+$sql .= "JOIN $old_db_name.title_avpart tavp on tavp.id = t.id ";
+$sql .= "JOIN $old_db_name.relation r on r.id2 = t.id AND r.description = 'Parent' ";
+$sql .= "JOIN Title on Title.old_id = r.id1 ";
+$sql .= "WHERE t.data_set = 'avpart' ";
+$sql .= "AND tavp.legacy_contributor_name = '' ";
+$sql .= "AND t.title = '' AND t.description <> '' ";
+$sql .= "ORDER BY title_id";
+$result = db_get_all($sql, MDB2_FETCHMODE_ASSOC);
+
+$title_id = -1;
+
+foreach ($result as $record)
+    {
+    // new title
+    if ($title_id != $record['title_id'])
+        {
+        $title_id = $record['title_id'];
+        $part_number = 1;
+        }
+    
+    $record['description'] = trim($record['description']);
+    $record['description'] = trim($record['description'], "\x00..\x1F"); // ascii control characters from 0-31
+    
+    if (empty($record['description']))
+        continue;
+    
+    $record['description'] = "'" . addslashes($record['description']) . "'";
+    
+    $sql = "UPDATE Section SET description=$record[description] " .
+            "WHERE Section.title_id=$title_id AND Section.number_in_series=$part_number ";
+    db_query($sql);
+    
+    $part_number++;
+    }
+unset($result);
+
+if ($showStatus)
+    print("Starting Person import...\n");
+
+// DO Person import
+// add temporary old_id field
+db_query("ALTER TABLE Person ADD old_id int unsigned NOT NULL");
+db_query("ALTER TABLE Person ADD INDEX (old_id)");
+
+// get person data to import
+$sql = "SELECT p.* FROM $old_db_name.pers p ";
+$sql .= "JOIN $old_db_name.relation r ON r.id2 = p.id ";
+$sql .= "JOIN $old_db_name.title t ON t.id = r.id1 ";
+$sql .= "WHERE r.id2_entity = 'pers' ";
+$sql .= "AND t.data_set IN('av','avpart','av,av_shk') ";
+$sql .= "GROUP BY p.id";
+$result = db_get_all($sql, MDB2_FETCHMODE_ASSOC);
+
+// import each person
+foreach ($result as $record)
+    {
+    // process notes field
+    if (empty($record['notes']))
+        $record['notes'] = "NULL";
+    else
+        $record['notes'] = "'" . addslashes(trim($record['notes'])) . "'";
+        
+    // convert name to "First Last" format
+    if (!empty($record['name_first']))
+        {
+        $name = trim($record['name_first']);
+        
+        // check for parentheses - if found put at the end of name
+        $pos = strpos($name, '(');
+        $extra = '';
+        if ($pos !== false)
+            {
+            $extra = trim(substr($name, $pos));
+            $name = trim(substr($name, 0, $pos));
+            }
+        
+        if (!empty($record['name_other'])) // add middle
+            $name .= " " . trim($record['name_other']);
+        $name .= " " . trim($record['name_last']);
+        if (!empty($extra))
+            $name .= " " . $extra;
+        }
+    else
+        {
+        // split last name field - old format like "Last, First" or "Last, First,"
+        $name = trim($record['name_last'], ",");
+        $names = explode(",", $name, 2);
+        if (count($names) > 1)
+            {
+            // check for parentheses - if found put at the end of name
+            $pos = strpos($names[1], '(');
+            $extra = '';
+            if ($pos !== false)
+                {
+                $extra = trim(substr($names[1], $pos));
+                $names[1] = trim(substr($names[1], 0, $pos));
+                }
+            
+            $name = trim($names[1]) . " " . trim($names[0]);
+            if (!empty($extra))
+                $name .= " " . $extra;
+            }
+        else
+            $name = trim($names[0]);
+        }
+    
+    $name = "'" . addslashes($name) . "'";
+    
+    $sql = "INSERT INTO Person (`date_created`, `name`, `notes`, `hermes_id`, `old_id`) VALUES (" .
+            "'$record[data_created]', $name, $record[notes], '". trim($record['legacy_id']) ."', '$record[id]')";
+    db_query($sql);
+    }
+unset($result);
+
+if ($showStatus)
+    print("Starting Organisation import...\n");
+
+// DO Organisation import
+// add temporary old_id field
+db_query("ALTER TABLE Organisation ADD old_id int unsigned NOT NULL");
+db_query("ALTER TABLE Organisation ADD INDEX (old_id)");
+
+// get organisation data to import
+$sql = "SELECT o.* FROM $old_db_name.org o ";
+$sql .= "JOIN $old_db_name.relation r ON r.id2 = o.id ";
+$sql .= "JOIN $old_db_name.title t ON t.id = r.id1 ";
+$sql .= "WHERE r.id2_entity = 'org' ";
+$sql .= "AND t.data_set IN ('av','av,av_shk') ";
+$sql .= "GROUP BY o.id";
+$result = db_get_all($sql, MDB2_FETCHMODE_ASSOC);
+
+// import each organisation
+foreach ($result as $record)
+    {
+    // do general field cleanup
+    foreach ($record as $key=>$item)
+        {
+        $item = trim($item);
+        $item = trim($item, "\x00..\x1F"); // ascii control characters from 0-31
+        
+        if ($key == 'type')
+            continue;
+        else if (empty($item))
+            $item = "NULL";
+        else
+            $item = "'" . addslashes($item) . "'";
+        
+        $record[$key] = $item;
+        }
+    
+    $sql = "INSERT INTO Organisation (`name`, `date_created`, `notes`, `contact_name`, " .
+            "`contact_position`, `email`, `web_url`, `telephone`, `fax`, `address_1`, " .
+            "`address_2`, `address_3`, `address_4`, `town`, `county`, `postcode`, " .
+            "`country`, `hermes_id`, `old_id`) VALUES (" .
+            "$record[name], $record[data_created], $record[notes], $record[contact_name], ".
+            "$record[contact_position], $record[email], $record[url], $record[telephone], ".
+            "$record[fax], $record[address_1], $record[address_2], $record[address_3], ".
+            "$record[address_4], $record[address_town], $record[address_county], ".
+            "$record[address_postcode], $record[address_country], $record[legacy_id], ".
+            "$record[id])";
+    db_query($sql);
+    
+    // retrieve the new id
+    $result = db_get_one("SELECT id FROM Organisation WHERE old_id=$record[id]");
+    $id = $result['id'];
+    
+    // DO OrganisationType link
+    if (!empty($record['type']))
+        {
+        $types = array_unique(explode(",", $record['type']));
+        foreach($types as $type)
+            db_query("INSERT INTO OrganisationTypeLink (`org_id`, `org_type_id`) VALUES ($id, $type)");
+        }
+    }
+unset($result);
+
+if ($showStatus)
+    print("Creating relation links...\n");
+
+// DO Role import
+$sql = "INSERT INTO Role (`is_technical`, `title`) ";
+$sql .= "SELECT 1, label FROM $old_db_name.val_pers_type ";
+$sql .= "WHERE data_set IN('av,av_shk', 'av_shk') ";
+db_query($sql);
+
+// fix flag on Performer role
+$sql = "UPDATE Role SET is_technical=0 WHERE title='Performer'";
+db_query($sql);
+
+// DO Participation link
+// do role conversion - 24 is a special case - convert to 8
+$sql = "INSERT INTO Participation (`title_id`, `person_id`, `role_id`, `date_created`) ";
+$sql .= "SELECT Title.id, Person.id, ";
+$sql .= "IF(r.description=24, 8, r.description) AS role, ";
+$sql .= "r.data_created FROM Person ";
+$sql .= "JOIN $old_db_name.relation r ON r.id2=Person.old_id ";
+$sql .= "JOIN Title ON Title.old_id=r.id1 ";
+$sql .= "WHERE r.id2_entity = 'pers'";
+$sql .= "GROUP BY Title.id, Person.id, role";
+db_query($sql);
+
+// DO SectionParticipation link
+$sql = "INSERT INTO SectionParticipation (`section_id`, `person_id`, `role_id`, `date_created`) ";
+$sql .= "SELECT Section.id, Person.id, ";
+$sql .= "IF(r.description=24, 8, r.description) AS role, ";
+$sql .= "r.data_created FROM Person ";
+$sql .= "JOIN $old_db_name.relation r ON r.id2=Person.old_id ";
+$sql .= "JOIN Section ON Section.old_id=r.id1 ";
+$sql .= "WHERE r.id2_entity = 'pers'";
+$sql .= "GROUP BY Section.id, Person.id, role";
+db_query($sql);
+
+// DO TitleRelation link
+$sql = "INSERT INTO TitleRelation (`title1_id`, `title2_id`) ";
+$sql .= "SELECT t1.id, t2.id FROM Title t2 ";
+$sql .= "JOIN $old_db_name.relation r ON r.id2=t2.old_id ";
+$sql .= "JOIN Title t1 ON t1.old_id=r.id1 ";
+$sql .= "WHERE r.id2_entity = 'title' AND r.description = 'Related'";
+db_query($sql);
+
+// DO OrganisationParticipation link
+$sql = "INSERT INTO OrganisationParticipation (`title_id`, `org_id`, `org_relation_id`, `date_created`) ";
+$sql .= "SELECT Title.id, Organisation.id, r.description, r.data_created FROM Organisation ";
+$sql .= "JOIN $old_db_name.relation r ON r.id2=Organisation.old_id ";
+$sql .= "JOIN Title ON Title.old_id=r.id1 ";
+$sql .= "WHERE r.id2_entity = 'org' ";
+$sql .= "GROUP BY Title.id, Organisation.id";
+db_query($sql);
+
+// DO TitleKeyword link
+$sql = "INSERT INTO TitleKeyword (`title_id`, `keyword_id`, `date_created`) ";
+$sql .= "SELECT Title.id, Keyword.id, r.data_created FROM Keyword ";
+$sql .= "JOIN $old_db_name.relation r ON r.id2=Keyword.old_id ";
+$sql .= "JOIN Title ON Title.old_id=r.id1 ";
+$sql .= "WHERE r.id2_entity = 'keyword' AND r.description = 'Thesaurus' ";
+$sql .= "GROUP BY Title.id, Keyword.id";
+db_query($sql);
+
+// DO SectionKeyword link
+$sql = "INSERT INTO SectionKeyword (`section_id`, `keyword_id`, `date_created`) ";
+$sql .= "SELECT Section.id, Keyword.id, r.data_created FROM Keyword ";
+$sql .= "JOIN $old_db_name.relation r ON r.id2=Keyword.old_id ";
+$sql .= "JOIN Section ON Section.old_id=r.id1 ";
+$sql .= "WHERE r.id2_entity = 'keyword' AND r.description = 'Thesaurus' ";
+$sql .= "GROUP BY Section.id, Keyword.id";
+db_query($sql);
+
+// DO TitleCategory link
+$sql = "INSERT INTO TitleCategory (`title_id`, `category_id`, `date_created`) ";
+$sql .= "SELECT Title.id, Category.id, r.data_created FROM Category ";
+$sql .= "JOIN $old_db_name.relation r ON r.id2=Category.old_id ";
+$sql .= "JOIN Title ON Title.old_id=r.id1 ";
+$sql .= "WHERE r.id2_entity = 'keyword' AND r.description = 'Subject' ";
+$sql .= "GROUP BY Title.id, Category.id";
+db_query($sql);
+
+// DO SectionCategory link
+$sql = "INSERT INTO SectionCategory (`section_id`, `category_id`, `date_created`) ";
+$sql .= "SELECT Section.id, Category.id, r.data_created FROM Category ";
+$sql .= "JOIN $old_db_name.relation r ON r.id2=Category.old_id ";
+$sql .= "JOIN Section ON Section.old_id=r.id1 ";
+$sql .= "WHERE r.id2_entity = 'keyword' AND r.description = 'Subject' ";
+$sql .= "GROUP BY Section.id, Category.id";
+db_query($sql);
+
+// Add Director field
+$sql = "CREATE TABLE IF NOT EXISTS Temp
+    (
+    title_id int unsigned NOT NULL,
+    misc text DEFAULT '' NOT NULL,
+    PRIMARY KEY (title_id)
+    );";
+db_query($sql);
+db_query("TRUNCATE TABLE Temp");
+
+$sql = "INSERT INTO Temp ";
+$sql .= "SELECT title_id, GROUP_CONCAT(Person.name SEPARATOR '; ') FROM `Participation` ";
+$sql .= "JOIN Person on Person.id = person_id ";
+$sql .= "WHERE role_id = 7 ";
+$sql .= "GROUP BY title_id";
+db_query($sql);
+
+$sql = "UPDATE Title, Temp ";
+$sql .= "Set Title.director=Temp.misc WHERE Title.id=Temp.title_id";
+db_query($sql);
+
+// Add Producer field
+db_query("TRUNCATE TABLE Temp");
+
+$sql = "INSERT INTO Temp ";
+$sql .= "SELECT title_id, GROUP_CONCAT(Person.name SEPARATOR '; ') FROM `Participation` ";
+$sql .= "JOIN Person on Person.id = person_id ";
+$sql .= "WHERE role_id = 6 ";
+$sql .= "GROUP BY title_id";
+db_query($sql);
+
+$sql = "UPDATE Title, Temp ";
+$sql .= "Set Title.producer=Temp.misc WHERE Title.id=Temp.title_id";
+db_query($sql);
+
+// Add Format field
+db_query("TRUNCATE TABLE Temp");
+$sql = "INSERT INTO Temp ";
+$sql .= "SELECT Title.id, ";
+$sql .= "GROUP_CONCAT(TitleFormat.title ORDER BY TitleFormat.title SEPARATOR ', ') ";
+$sql .= "FROM `Title` ";
+$sql .= "JOIN TitleFormatLink on title_id = Title.id ";
+$sql .= "JOIN TitleFormat on TitleFormat.id = format_id ";
+$sql .= "GROUP BY Title.id";
+db_query($sql);
+
+$sql = "UPDATE Title, Temp ";
+$sql .= "Set Title.format=Temp.misc WHERE Title.id=Temp.title_id";
+db_query($sql);
+
+// Add Subject field
+db_query("TRUNCATE TABLE Temp");
+$sql = "INSERT INTO Temp ";
+$sql .= "SELECT Title.id, ";
+$sql .= "GROUP_CONCAT(Category.title ORDER BY Category.title SEPARATOR '; ') ";
+$sql .= "FROM `Title` ";
+$sql .= "JOIN TitleCategory on title_id = Title.id ";
+$sql .= "JOIN Category on Category.id = category_id ";
+$sql .= "GROUP BY Title.id";
+db_query($sql);
+
+$sql = "UPDATE Title, Temp ";
+$sql .= "Set Title.subject=Temp.misc WHERE Title.id=Temp.title_id";
+db_query($sql);
+
+// Add Section.title field
+db_query("TRUNCATE TABLE Temp");
+$sql = "INSERT INTO Temp ";
+$sql .= "SELECT Title.id, ";
+$sql .= "GROUP_CONCAT(Section.title ORDER BY Section.title SEPARATOR ' @@ ') ";
+$sql .= "FROM `Title` ";
+$sql .= "JOIN Section on title_id = Title.id ";
+$sql .= "GROUP BY Title.id";
+db_query($sql);
+
+$sql = "UPDATE Title, Temp ";
+$sql .= "Set Title.section_title=Temp.misc WHERE Title.id=Temp.title_id";
+db_query($sql);
+
+// Add Misc field
+// notes fields
+$sql = "UPDATE Title ";
+$sql .= "Set Title.misc=CONCAT_WS(' @@ ', Title.misc, Title.notes, Title.notes_documentation, Title.notes_uses)";
+db_query($sql);
+
+// language
+$sql = "UPDATE Title, Language ";
+$sql .= "Set Title.misc=CONCAT_WS(' @@ ', Title.misc, Language.title) ";
+$sql .= "WHERE Title.language_id=Language.id";
+db_query($sql);
+
+// country
+db_query("TRUNCATE TABLE Temp");
+$sql = "INSERT INTO Temp ";
+$sql .= "SELECT Title.id, GROUP_CONCAT(Country.title ORDER BY Country.title SEPARATOR ' @@ ') ";
+$sql .= "FROM Title ";
+$sql .= "JOIN TitleCountry on title_id = Title.id ";
+$sql .= "JOIN Country on Country.id = country_id ";
+$sql .= "GROUP BY Title.id";
+db_query($sql);
+
+$sql = "UPDATE Title, Temp ";
+$sql .= "Set Title.misc=CONCAT_WS(' @@ ', Title.misc, Temp.misc) ";
+$sql .= "WHERE Title.id=Temp.title_id";
+db_query($sql);
+
+// title format
+db_query("TRUNCATE TABLE Temp");
+$sql = "INSERT INTO Temp ";
+$sql .= "SELECT Title.id, GROUP_CONCAT(tf.title ORDER BY tf.title SEPARATOR ' @@ ') ";
+$sql .= "FROM Title ";
+$sql .= "JOIN TitleFormatLink on title_id = Title.id ";
+$sql .= "JOIN TitleFormat tf on tf.id = format_id ";
+$sql .= "GROUP BY Title.id";
+db_query($sql);
+
+$sql = "UPDATE Title, Temp ";
+$sql .= "Set Title.misc=CONCAT_WS(' @@ ', Title.misc, Temp.misc) ";
+$sql .= "WHERE Title.id=Temp.title_id";
+db_query($sql);
+
+// keywords
+db_query("TRUNCATE TABLE Temp");
+$sql = "INSERT INTO Temp ";
+$sql .= "SELECT Title.id, GROUP_CONCAT(Keyword.title ORDER BY Keyword.title SEPARATOR ' @@ ') ";
+$sql .= "FROM Title ";
+$sql .= "JOIN TitleKeyword on title_id = Title.id ";
+$sql .= "JOIN Keyword on Keyword.id = keyword_id ";
+$sql .= "GROUP BY Title.id";
+db_query($sql);
+
+$sql = "UPDATE Title, Temp ";
+$sql .= "Set Title.misc=CONCAT_WS(' @@ ', Title.misc, Temp.misc) ";
+$sql .= "WHERE Title.id=Temp.title_id";
+db_query($sql);
+
+// categories
+db_query("TRUNCATE TABLE Temp");
+$sql = "INSERT INTO Temp ";
+$sql .= "SELECT Title.id, GROUP_CONCAT(Category.title ORDER BY Category.title SEPARATOR ' @@ ') ";
+$sql .= "FROM Title ";
+$sql .= "JOIN TitleCategory on title_id = Title.id ";
+$sql .= "JOIN Category on Category.id = category_id ";
+$sql .= "GROUP BY Title.id";
+db_query($sql);
+
+$sql = "UPDATE Title, Temp ";
+$sql .= "Set Title.misc=CONCAT_WS(' @@ ', Title.misc, Temp.misc) ";
+$sql .= "WHERE Title.id=Temp.title_id";
+db_query($sql);
+
+// people
+db_query("TRUNCATE TABLE Temp");
+$sql = "INSERT INTO Temp ";
+$sql .= "SELECT Title.id, GROUP_CONCAT(DISTINCT Person.name ORDER BY Person.name SEPARATOR ' @@ ') ";
+$sql .= "FROM Title ";
+$sql .= "JOIN Participation on title_id = Title.id ";
+$sql .= "JOIN Person on Person.id = person_id ";
+$sql .= "GROUP BY Title.id";
+db_query($sql);
+
+$sql = "UPDATE Title, Temp ";
+$sql .= "Set Title.misc=CONCAT_WS(' @@ ', Title.misc, Temp.misc) ";
+$sql .= "WHERE Title.id=Temp.title_id";
+db_query($sql);
+
+// organisation names
+db_query("TRUNCATE TABLE Temp");
+$sql = "INSERT INTO Temp ";
+$sql .= "SELECT Title.id, GROUP_CONCAT(DISTINCT Organisation.name ORDER BY Organisation.name SEPARATOR ' @@ ') ";
+$sql .= "FROM Title ";
+$sql .= "JOIN OrganisationParticipation on title_id = Title.id ";
+$sql .= "JOIN Organisation on Organisation.id = org_id ";
+$sql .= "GROUP BY Title.id";
+db_query($sql);
+
+$sql = "UPDATE Title, Temp ";
+$sql .= "Set Title.misc=CONCAT_WS(' @@ ', Title.misc, Temp.misc) ";
+$sql .= "WHERE Title.id=Temp.title_id";
+db_query($sql);
+
+// Section fields
+// section title
+db_query("TRUNCATE TABLE Temp");
+$sql = "INSERT INTO Temp ";
+$sql .= "SELECT Section.title_id, GROUP_CONCAT(DISTINCT Section.title ORDER BY Section.title SEPARATOR ' @@ ') ";
+$sql .= "FROM Section ";
+$sql .= "GROUP BY Section.title_id";
+db_query($sql);
+
+$sql = "UPDATE Title, Temp ";
+$sql .= "Set Title.misc=CONCAT_WS(' @@ ', Title.misc, Temp.misc) ";
+$sql .= "WHERE Title.id=Temp.title_id";
+db_query($sql);
+
+// section description
+db_query("TRUNCATE TABLE Temp");
+$sql = "INSERT INTO Temp ";
+$sql .= "SELECT Section.title_id, GROUP_CONCAT(DISTINCT Section.description ORDER BY Section.description SEPARATOR ' @@ ') ";
+$sql .= "FROM Section ";
+$sql .= "GROUP BY Section.title_id";
+db_query($sql);
+
+$sql = "UPDATE Title, Temp ";
+$sql .= "Set Title.misc=CONCAT_WS(' @@ ', Title.misc, Temp.misc) ";
+$sql .= "WHERE Title.id=Temp.title_id";
+db_query($sql);
+
+// section notes
+db_query("TRUNCATE TABLE Temp");
+$sql = "INSERT INTO Temp ";
+$sql .= "SELECT Section.title_id, GROUP_CONCAT(DISTINCT Section.notes ORDER BY Section.notes SEPARATOR ' @@ ') ";
+$sql .= "FROM Section ";
+$sql .= "GROUP BY Section.title_id";
+db_query($sql);
+
+$sql = "UPDATE Title, Temp ";
+$sql .= "Set Title.misc=CONCAT_WS(' @@ ', Title.misc, Temp.misc) ";
+$sql .= "WHERE Title.id=Temp.title_id";
+db_query($sql);
+
+// section keywords
+db_query("TRUNCATE TABLE Temp");
+$sql = "INSERT INTO Temp ";
+$sql .= "SELECT Section.title_id, GROUP_CONCAT(Keyword.title ORDER BY Keyword.title SEPARATOR ' @@ ') ";
+$sql .= "FROM Section ";
+$sql .= "JOIN SectionKeyword on section_id = Section.id ";
+$sql .= "JOIN Keyword on Keyword.id = keyword_id ";
+$sql .= "GROUP BY Section.title_id";
+db_query($sql);
+
+$sql = "UPDATE Title, Temp ";
+$sql .= "Set Title.misc=CONCAT_WS(' @@ ', Title.misc, Temp.misc) ";
+$sql .= "WHERE Title.id=Temp.title_id";
+db_query($sql);
+
+// categories
+db_query("TRUNCATE TABLE Temp");
+$sql = "INSERT INTO Temp ";
+$sql .= "SELECT Section.title_id, GROUP_CONCAT(Category.title ORDER BY Category.title SEPARATOR ' @@ ') ";
+$sql .= "FROM Section ";
+$sql .= "JOIN SectionCategory on section_id = Section.id ";
+$sql .= "JOIN Category on Category.id = category_id ";
+$sql .= "GROUP BY Section.title_id";
+db_query($sql);
+
+$sql = "UPDATE Title, Temp ";
+$sql .= "Set Title.misc=CONCAT_WS(' @@ ', Title.misc, Temp.misc) ";
+$sql .= "WHERE Title.id=Temp.title_id";
+db_query($sql);
+
+// people
+db_query("TRUNCATE TABLE Temp");
+$sql = "INSERT INTO Temp ";
+$sql .= "SELECT Section.title_id, GROUP_CONCAT(DISTINCT Person.name ORDER BY Person.name SEPARATOR ' @@ ') ";
+$sql .= "FROM Section ";
+$sql .= "JOIN SectionParticipation on section_id = Section.id ";
+$sql .= "JOIN Person on Person.id = person_id ";
+$sql .= "GROUP BY Section.title_id";
+db_query($sql);
+
+$sql = "UPDATE Title, Temp ";
+$sql .= "Set Title.misc=CONCAT_WS(' @@ ', Title.misc, Temp.misc) ";
+$sql .= "WHERE Title.id=Temp.title_id";
+db_query($sql);
+
+// Add format_summary field
+db_query("DROP TABLE Temp");
+$sql = "CREATE TABLE IF NOT EXISTS Temp
+    (
+    title_id int unsigned NOT NULL,
+    flag     int unsigned NOT NULL DEFAULT 0,
+    PRIMARY KEY (title_id,flag)
+    );";
+db_query($sql);
+$sql = "INSERT IGNORE INTO Temp ";
+$sql .= "SELECT TitleFormatLink.title_id, IF(format_id=1 OR format_id=4,2,1) ";
+$sql .= "FROM TitleFormatLink";
+db_query($sql);
+$sql = "UPDATE Title SET format_summary = (SELECT SUM(flag) ";
+$sql .= "FROM Temp ";
+$sql .= "WHERE Temp.title_id=Title.id ";
+$sql .= "GROUP BY title_id);";
+db_query($sql);
+
+// cleanup
+// drop temporary ids
+db_query("ALTER TABLE Keyword DROP old_id");
+db_query("ALTER TABLE Category DROP old_id");
+db_query("ALTER TABLE Title DROP old_id");
+db_query("ALTER TABLE Section DROP old_id");
+db_query("ALTER TABLE Person DROP old_id");
+db_query("ALTER TABLE Organisation DROP old_id");
+db_query("DROP TABLE Temp");
+
+?>

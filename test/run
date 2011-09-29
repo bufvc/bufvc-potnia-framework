@@ -1,0 +1,28 @@
+#! /bin/bash
+# $Id: test_db_updates,v 1.12 2005/08/15 13:57:25 jim Exp $
+# Run all tests
+# James Fryer, 1 July 08
+# BUFVC Potnia copyright 2011, BUFVC et al. See LICENSE for licensing information (GPL3). See http://potnia.org, http://bufvc.ac.uk
+
+basedir=$(cd $(dirname $0)/..; pwd)
+cd $basedir
+
+DIRS="$basedir/test $(find $basedir/{src,modules} -name test -type d)"
+
+# Run test scripts in test/, src/, modules/
+for dir in $DIRS
+do 
+    for f in $(find $dir -type f -perm +111 -name 'test*' -not -name '*.php*' -not -name '*.bak' -not -name '*~')
+    do 
+        $f
+    done
+done
+
+# Run unit tests in test/, src/, modules/
+for dir in $DIRS; do 
+    $basedir/test/run_php_tests $* $dir
+done
+
+# Other kinds of test? 
+# Integration tests, written in php/python/whatever?
+# Perhaps the database tests belong in sql/???

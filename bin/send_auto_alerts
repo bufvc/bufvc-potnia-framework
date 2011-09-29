@@ -1,0 +1,163 @@
+#! /usr/bin/php -q
+<?php
+// $Id$
+// Auto-Alerts script
+// Phil Hansen, 16 Sept 09
+// BUFVC Potnia copyright 2011, BUFVC et al. See LICENSE for licensing information (GPL3). See http://potnia.org, http://bufvc.ac.uk
+
+// Processes user auto-alerts and emails the results
+
+require_once(dirname(realpath(__FILE__)) . '/../web/include.php');
+
+// Cache of loaded queries
+$_query_cache = Array();
+
+$user_module = Module::load('user');
+$ds = $user_module->get_datasource();
+// get the users from the DB
+$n = 0;
+do {
+   $result = $ds->search('/user', '', $n, 1000);
+   $n += 1000;
+   foreach ($result['data'] as $user)
+       check_auto_alerts($user['login']);
+} while ($result['count'] > 0);
+
+/// Checks if a user has saved searches and today is the search day
+function check_auto_alerts($login)
+    {
+    $user = User::instance($login);
+    // check errors
+    if (is_null($user))
+        return;
+    if (!$user->has_right('save_data'))
+        return;
+    $query_list = $user->load_data('saved_searches');
+    // no saved searches
+    if (is_null($query_list))
+        return;
+    $active_list = $user->load_data('saved_searches_active');
+    // no email set
+    if (empty($user->email))
+        return;
+    // check search day
+    if (@$user->prefs['saved_search_day'] != get_current_day_of_the_week())
+        return;
+
+    // set global USER for logging purposes
+    global $USER;
+    $USER = $user;
+    $results = run_queries($query_list, $active_list);
+    if (count($results) == 0)
+        return;
+    send_results($user, $results);
+    }
+
+// Run saved, active queries and prepare results
+function run_queries($query_list, $active_list)
+    {
+    global $CONF;
+    $search_results = Array();
+    $separator = str_repeat('-', 42) ."\n\n";
+    
+    foreach ($query_list as $key=>$query)
+        {
+        if (@$active_list[$key])
+            {
+            $module_name = $query['module'];
+            $module = Module::load($module_name);
+            // check if this module has auto alerts enabled
+            if (!$module->auto_alert_enabled)
+                continue;
+            // load query for this module (using query cache)
+            if (isset($_query_cache[$module_name]))
+                $module_query = $_query_cache[$module_name];
+            else
+                {
+                $module_query = QueryFactory::create($module);
+                $module_query->set_default_page_size( $CONF['auto_alerts_results_size'] );
+                $module_query->_module = $module;
+                $module_query->_ds = $module;
+                $_query_cache[$module_name] = $module_query;
+                }
+            
+            // set config module for logging purposes
+            $original_module = $CONF['module'];
+            $CONF['module'] = $module->name;
+            // date is from two weeks in the past
+            $query['criteria']['date'] = date('Y-m-d', time() - 1209600);
+            // add any additional criteria from module config
+            if (isset($module->auto_alert_criteria))
+                $query['criteria'] = array_merge($query['criteria'], $module->auto_alert_criteria);
+            $module_query->set_criteria_values($query['criteria']);
+            $results = Array();
+            $results['data'] = $module_query->search();
+            // store fields for display
+            $results['count'] = count($results['data']);
+            if ($results['count'] > 0)
+                $results['formatted_text'] = $module->format_records($results['data'], 'text', $CONF['auto_alerts_results_size'], $separator);
+            $results['total'] = $module_query->info['results_count'];
+            $results['text'] = $module_query->criteria_string(QUERY_STRING_TYPE_TEXT);
+            $results['module'] = $query['title'];
+            $results['url'] = $module_query->url();
+            $search_results[] = $results;
+            // restore original module
+            $CONF['module'] = $original_module;
+            }
+        }
+    return $search_results;
+    }
+
+// Prepare email of results and send to user
+function send_results($user, $queries)
+    {
+    global $CONF, $MODULE, $STRINGS, $MAILER;
+    $email_headers = Array();
+    $email_headers['From'] = $CONF['contact_email'];
+    $email_headers['To'] = $user->email;
+    $email_headers['Subject'] = $STRINGS['auto_alert_email_results_subject'];
+    $email_headers['Content-Type'] = $MODULE->content_type('text');
+    $body = get_email_body($queries);
+    
+    // make sure each line uses CRLF
+    str_replace("\r\n", "\n", $body); // for safety
+    str_replace("\n", "\r\n", $body);
+
+    $MAILER->send($user->email, $email_headers, $body);
+    if (PEAR::isError($MAILER))
+        xlog(2, "Mail send failed (From: $CONF[contact_email] To: $user->email) Message: ".$MAILER->getMessage());
+    else
+        xlog(2, "Sent mail (From: $CONF[contact_email] To: $user->email)", 'AUTO-ALERTS');
+    }
+
+// Formats email body
+function get_email_body($queries)
+    {
+    global $CONF, $STRINGS;
+    $body = $STRINGS['auto_alert_email_intro']."\n";
+    $separator_length = 42;
+    $separator1 = str_repeat('=', $separator_length) ."\n";
+    $separator2 = str_repeat('-', $separator_length) ."\n";
+    foreach ($queries as $query)
+        {
+        // query header
+        $body .= $separator1 . $query['module'] .' '. $query['text'];
+        $body .= "Results: $query[total]\n" . $separator1;
+        
+        if ($query['count'] > 0)
+            {
+            if ($query['total'] > $query['count'])
+                {
+                $body .= "\n".wordwrap($STRINGS['auto_alert_email_too_many_results'], $CONF['auto_alerts_email_line_length']) ."\n";
+                $body .= "Search URL: $query[url]\n";
+                }
+            $body .= "\n".$query['formatted_text'];
+            }
+        $body .= "\n";
+        }
+    // footer
+    $body .= "\n".$separator2."\n";
+    $body .= wordwrap($STRINGS['auto_alert_email_footer'], $CONF['auto_alerts_email_line_length']) ."\n";
+    return $body;
+    }
+?>

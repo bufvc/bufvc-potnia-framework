@@ -1,0 +1,49 @@
+/* Styles for the print */
+body { font-size:13px; line-height:1.231; font-family:Arial,Helvetica,clean,sans-serif; *font-size:small; *font:x-small; }
+table { font-size:inherit;font:100%; }
+pre,code,kbd,samp,tt {font-family:monospace;*font-size:108%;line-height:100%;}
+
+.bufvc { font-size:138.5%; }
+.slogan { font-size:100%; }
+.bufvc, .slogan, .bufvc a { font-family:'Gill', 'Gill Sans', 'Gill Sans MT', Arial; margin:0; padding:0; color:#3A3A3A; } /*---- only for IE6, move to appropiate css file ----*/
+
+	body, .page, .container { color: #000 !important; }
+	a, a:link, a:visited { color: #000 !important; text-decoration:none !important; }
+	.container a:link:after, .container a:visited:after {
+	   content: " [" attr(href) "] ";
+	   font-size: 10px; font-weight:normal;
+	   }
+	.container a[href^="#"]:after {
+	  content: " [http://bufvc.ac.uk/" attr(href) "] ";
+	   }
+	.container a[href^="/"]:after {
+	  content: " [http://bufvc.ac.uk" attr(href) "] ";
+	   }
+	
+/*---- Hide this elements from the user ------*/
+	.help-navigation, 
+	.bufvc_navigation, 
+	.global_navigation, 
+	.footer_navigation, 
+	.footer_feed, 
+	.sub_navigation, 
+	.subnav,
+	.skip,
+	.content_navigation_column,
+	.services_nav,
+	.sponsors_white,
+	.bookmarks,
+	.footer_spacer,
+	#search,
+	#content-navigation { display: none !important; } 
+	
+	img {border:none;}
+	
+	.header ul {list-style-type: none} 
+	.header ul, .header li {margin:0; padding:0;}
+	.slogan {font-style:italic;}
+	#main a.pdf, #main a.html, #main a.qt, #main a.ical, #main a.dl, #main a.dmg, #main a.zip, #main a.keynote, #main a.audio { padding-left: 0 !important; background-image: none !important; }
+
+.header-wrapper, .body-wrapper, #header { display:block; clear:both; }
+.record dt { font-weight:bold; float:left; width:160px; }
+.record dd { margin-left:165px; }

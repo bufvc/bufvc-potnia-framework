@@ -1,0 +1,178 @@
+#
+# Sphinx configuration file sample
+#
+# WARNING! While this sample file mentions all available options,
+# it contains (very) short helper descriptions only. Please refer to
+# doc/sphinx.html for details.
+#
+
+#############################################################################
+## data source definition
+#############################################################################
+
+source @@source_name@@ : root
+{
+	sql_db					= @@sql_db@@
+
+	# pre-query, executed before the main fetch query
+	# multi-value, optional, default is empty list of queries
+	#
+	# sql_query_pre			= SET NAMES utf8
+	# sql_query_pre			= SET SESSION query_cache_type=OFF
+
+	# main document fetch query
+	# mandatory, integer document ID field MUST be the first selected column
+	sql_query				= \
+@@sql_query@@
+
+
+	# range query setup, query that must return min and max ID values
+	# optional, default is empty
+	#
+	# sql_query will need to reference $start and $end boundaries
+	# if using ranged query:
+	#
+	# sql_query				= \
+	#	SELECT doc.id, doc.id AS group, doc.title, doc.data \
+	#	FROM documents doc \
+	#	WHERE id>=$start AND id<=$end
+	#
+	# sql_query_range		= SELECT MIN(id),MAX(id) FROM documents
+
+
+	# range query step
+	# optional, default is 1024
+	#
+	# sql_range_step		= 1000
+
+
+	# unsigned integer attribute declaration
+	# multi-value (an arbitrary number of attributes is allowed), optional
+	# optional bit size can be specified, default is 32
+	#
+	# sql_attr_uint			= author_id
+	# sql_attr_uint			= forum_id:9 # 9 bits for forum_id
+    # @@sql_attr_uint@@
+    
+	# boolean attribute declaration
+	# multi-value (an arbitrary number of attributes is allowed), optional
+	# equivalent to sql_attr_uint with 1-bit size
+	#
+	# sql_attr_bool			= is_deleted
+    # @@sql_attr_bool@@
+
+	# bigint attribute declaration
+	# multi-value (an arbitrary number of attributes is allowed), optional
+	# declares a signed (unlike uint!) 64-bit attribute
+	#
+	# sql_attr_bigint			= my_bigint_id
+
+
+	# UNIX timestamp attribute declaration
+	# multi-value (an arbitrary number of attributes is allowed), optional
+	# similar to integer, but can also be used in date functions
+	# @@sql_attr_timestamp@@
+
+	# string ordinal attribute declaration
+	# multi-value (an arbitrary number of attributes is allowed), optional
+	# sorts strings (bytewise), and stores their indexes in the sorted list
+	# sorting by this attr is equivalent to sorting by the original strings
+	#
+	# sql_attr_str2ordinal	= author_name
+    # @@sql_attr_str2ordinal@@
+
+
+	# floating point attribute declaration
+	# multi-value (an arbitrary number of attributes is allowed), optional
+	# values are stored in single precision, 32-bit IEEE 754 format
+	#
+	# sql_attr_float = lat_radians
+	# sql_attr_float = long_radians
+
+
+	# multi-valued attribute (MVA) attribute declaration
+	# multi-value (an arbitrary number of attributes is allowed), optional
+	# MVA values are variable length lists of unsigned 32-bit integers
+	#
+	# syntax is ATTR-TYPE ATTR-NAME 'from' SOURCE-TYPE [;QUERY] [;RANGE-QUERY]
+	# ATTR-TYPE is 'uint' or 'timestamp'
+	# SOURCE-TYPE is 'field', 'query', or 'ranged-query'
+	# QUERY is SQL query used to fetch all ( docid, attrvalue ) pairs
+	# RANGE-QUERY is SQL query used to fetch min and max ID values, similar to 'sql_query_range'
+	#
+	# sql_attr_multi	= uint tag from query; SELECT id, tag FROM tags
+	# sql_attr_multi	= uint tag from ranged-query; \
+	#	SELECT id, tag FROM tags WHERE id>=$start AND id<=$end; \
+	#	SELECT MIN(id), MAX(id) FROM tags
+    # @@sql_attr_multi@@
+
+	# post-query, executed on sql_query completion
+	# optional, default is empty
+	#
+	# sql_query_post		=
+
+	
+	# post-index-query, executed on successful indexing completion
+	# optional, default is empty
+	# $maxid expands to max document ID actually fetched from DB
+	#
+	# sql_query_post_index = REPLACE INTO counters ( id, val ) \
+	#	VALUES ( 'max_indexed_id', $maxid )
+
+
+	# ranged query throttling, in milliseconds
+	# optional, default is 0 which means no delay
+	# enforces given delay before each query step
+	sql_ranged_throttle	= 0
+
+	# document info query, ONLY for CLI search (ie. testing and debugging)
+	# optional, default is empty
+	# must contain $id macro and must fetch the document by that id
+	# sql_query_info		= SELECT * FROM Programme p JOIN Broadcast b ON p.id=b.prog_id WHERE b.id=$id
+
+	# kill-list query, fetches the document IDs for kill-list
+	# k-list will suppress matches from preceding indexes in the same query
+	# optional, default is empty
+	#
+	# sql_query_killlist	= SELECT id FROM documents WHERE edited>=@last_reindex
+
+
+	# columns to unpack on indexer side when indexing
+	# multi-value, optional, default is empty list
+	#
+	# unpack_zlib = zlib_column
+	# unpack_mysqlcompress = compressed_column
+	# unpack_mysqlcompress = compressed_column_2
+
+
+	# maximum unpacked length allowed in MySQL COMPRESS() unpacker
+	# optional, default is 16M
+	#
+	# unpack_mysqlcompress_maxsize = 16M
+
+
+}
+
+#############################################################################
+## index definition
+#############################################################################
+
+# local index example
+#
+# this is an index which is stored locally in the filesystem
+#
+# all indexing-time options (such as morphology and charsets)
+# are configured per local index
+index @@index_name@@ : base_index
+{
+	# document source(s) to index
+	# multi-value, mandatory
+	# document IDs must be globally unique across all sources
+	source			= @@source_name@@
+
+	# index files path and file name, without extension
+	# mandatory, path must be writable, extensions will be auto-appended
+	path			= /var/lib/sphinxsearch/data/@@source_name@@
+}
+
+# --eof--

@@ -1,0 +1,38 @@
+#! /bin/bash
+# $Id$
+# Test latin1 to utf8 conversion script
+# Phil Hansen, 16 Feb 2010
+# BUFVC Potnia copyright 2011, BUFVC et al. See LICENSE for licensing information (GPL3). See http://potnia.org, http://bufvc.ac.uk
+
+set +x 
+
+basedir=$(cd $(dirname $0)/..;pwd)
+cd $basedir
+
+DBNAME=test_convert
+
+# Keep dump files if -k flag
+if [[ "$1" == "-k" ]]; then KEEP_FILES=1; fi
+
+# Create databases
+mysqladmin -uroot  -f drop ${DBNAME} &>/dev/null
+mysqladmin -uroot  create ${DBNAME} &>/dev/null
+mysql -uroot --default-character-set=latin1 ${DBNAME} < sql/charset_latin1_test_data.sql
+mysqladmin -uroot  -f drop ${DBNAME}_expected &>/dev/null
+mysqladmin -uroot  create ${DBNAME}_expected &>/dev/null
+mysql -uroot --default-character-set=utf8 ${DBNAME}_expected < sql/charset_utf8_test_data.sql
+
+# Perform conversion
+bin/convert_database_to_utf8 ${DBNAME}
+
+# Check that the two are the same
+mysqldump --skip-opt -uroot --default-character-set=utf8 ${DBNAME}|grep -v '^--.*' &> dump1
+mysqldump --skip-opt -uroot --default-character-set=utf8 ${DBNAME}_expected|grep -v '^--.*' &> dump2
+if ! diff dump1 dump2 ; then echo Latin1 to UTF-8 conversion test: Failed; fi
+
+# Clean up
+if [ -z $KEEP_FILES ]; then
+    rm -f dump1 dump2
+fi
+mysqladmin -uroot  -f drop ${DBNAME} &>/dev/null
+mysqladmin -uroot  -f drop ${DBNAME}_expected &>/dev/null

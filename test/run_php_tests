@@ -1,0 +1,129 @@
+#! /bin/bash
+# $Id: run,v 1.30 2008/02/08 17:53:28 jim Exp $
+# Set up environment and call test PHP scripts
+# James Fryer, 1 Jul 08
+# BUFVC Potnia copyright 2011, BUFVC et al. See LICENSE for licensing information (GPL3). See http://potnia.org, http://bufvc.ac.uk
+
+set +x
+VERBOSE=TRUE
+
+# Get the project directory
+basedir=$(cd $(dirname $0)/..;pwd)
+cd $basedir
+
+# Flag file: if this file exists, unit tests are active. 
+FLAG_FILE=$basedir/test/UNIT_TEST_ACTIVE
+
+# Database for test data
+# User 'test' with password '' needs full rights on this database
+# (see sql/unit_test_install.sql)
+DATABASE=unit_test
+
+function usage()
+    {
+    cat << _EOT_
+$(basename $0): Run PHP unit tests
+Usage: $(basename $0) [options] dir-or-file-to-test
+Options:
+    -k Keep the '$DATABASE' database 
+    -q Be quiet
+    -h This message
+Any further arguments are the names of test files to run, or a directory of files
+_EOT_
+    }
+
+# Extra SQL files to import
+### FIXME: This list is too long, need a way to select individual files per module/whatever
+SQL_FILES="modules/user/sql/user_schema.sql modules/user/sql/bufvc_user_schema.sql sql/unit_test_user_data.sql"
+
+# Process command line options
+while getopts hkqd: option 
+do 
+    case $option in 
+    h)  
+        usage
+        exit 2
+    ;; 
+    k ) 
+        KEEP_DB=Y
+    ;; 
+    q ) 
+        VERBOSE=0
+    ;; 
+    esac 
+done
+shift $(($OPTIND - 1))
+
+# Get test file/dir
+TEST_ARG=$*
+
+if [ -z "$TEST_ARG" ] 
+then
+        usage
+        exit 2
+fi
+
+# If we are passed a directory, look for test files there
+if [ -d "$TEST_ARG" ] 
+then
+    test_files=$TEST_ARG/test*.php
+else
+    test_files=$TEST_ARG
+fi
+
+# Lock the tests
+touch $FLAG_FILE
+
+# Get module name (if any)
+module=$(sed '/modules/!d; s|^.*modules/\([^/]*\).*$|\1|' <<< $TEST_ARG)
+
+# Clear log file
+rm -f $basedir/var/log/unit_test.log
+touch $basedir/var/log/unit_test.log
+chmod a+rw $basedir/var/log/unit_test.log
+
+# Create database
+mysqladmin -utest -f drop $DATABASE  &>/dev/null
+mysqladmin -utest create $DATABASE &>/dev/null
+
+# Init database from schema and unit test data
+if [ -z $module ]
+then
+    # Default database
+    schema_sql=$basedir/sql/unit_test_schema.sql
+    data_sql=$basedir/sql/unit_test_data.sql
+else    
+    # Module-specific
+    schema_sql=$basedir/modules/$module/sql/schema.sql
+    data_sql=$basedir/modules/$module/sql/unit_test_data.sql
+fi
+all_sql_files="$SQL_FILES $schema_sql $data_sql"
+for f in $all_sql_files; do
+    if [ -f $f ]; then
+        ### if [ ! -z $VERBOSE ]; then echo "Sql: $f"; fi
+        mysql -utest $DATABASE < $f
+    fi
+done
+
+# Run the tests
+if [ -e $(echo $test_files|sed 's/ .*//') ]; then
+  for f in $test_files
+    do
+      cd $(dirname $f)
+      ### if [ ! -z $VERBOSE ]; then echo $f; fi
+      f=$(basename $f)
+      MODULE=$module UNITTEST_VERBOSE=$VERBOSE php -q $f
+      cd $basedir
+  done
+fi
+
+# Clean up
+rm -rf $basedir/test/tmp/* 2> /dev/null
+# Retain database contents if -k option is set.
+if [ -z $KEEP_DB ] 
+then
+    mysqladmin -utest  -f drop $DATABASE &>/dev/null
+else
+    echo "Database '$DATABASE' not deleted"
+fi
+rm -f $FLAG_FILE

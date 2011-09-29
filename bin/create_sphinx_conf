@@ -1,0 +1,243 @@
+#! /usr/bin/php -q
+<?php
+// $Id$
+// Create a starting sphinx.conf file for a specified module
+// Phil Hansen, 3 June 2011
+// BUFVC Potnia copyright 2011, BUFVC et al. See LICENSE for licensing information (GPL3). See http://potnia.org, http://bufvc.ac.uk
+
+require_once(dirname(realpath(__FILE__)) . '/../web/include.php');
+
+$usage = "Usage: create_sphinx_conf [module] [table]\n";
+$usage .= "If no table is specified then the first table in the config will be used.\n";
+
+// Get module
+if (count($argv) < 2 || @$argv[1] == '-h')
+    die($usage);
+else
+    {
+    $modname = $argv[1];
+    $table = @$argv[2];
+    }
+
+$module = Module::load($modname);
+$ds = $module->get_datasource();
+
+// if table was not given, retrieve from the config
+if (!isset($table))
+    {
+    $meta = $ds->_get_meta('meta');
+    // safety check, is this necessary??
+    $table = ($meta['names'][0] != 'meta') ? $meta['names'][0] : $meta['names'][1];
+    }
+
+// setup some sphinx values
+$source_name = $module->name.'_'.$table;
+$index_name = $source_name;
+$sql_db = $module->name.'_test';
+$filename = $CONF['path_modules'] . $module->name . '/sql/sphinx.conf';
+
+// get the base template
+$template = file_get_contents($CONF['path_etc'].'sphinx.conf.template');
+$template = str_replace('@@source_name@@', $source_name, $template);
+$template = str_replace('@@sql_db@@', $sql_db, $template);
+$template = str_replace('@@index_name@@', $index_name, $template);
+
+$meta = $ds->_get_meta($table);
+$select = Array();
+$join = Array();
+
+// sphinx requires unique integer document ids as the first field in the sql query
+// assume the table has an id field
+$select[] = 't.id';
+
+// Process each field, gather the select values and any join clauses
+foreach ($meta['fields'] as $field=>$info)
+    {
+    $type = @$info['type'];
+    // ignore the id field as we already have it
+    if ($field == 'id')
+        continue;
+    // get URL field (ignore it if it is the id field)
+    if ($field == 'url' && isset($info['select']))
+        {
+        // ignore this if it is the id field
+        if ($info['select'] == 'id')
+            continue;
+        $select[] = 't.'.$info['select'];
+        }
+    // M:M and 1:M fields - concatenate the values
+    else if ($type == 'many_to_many' || $type == 'one_to_many')
+        {
+        $related_table = (isset($info['related_to'])) ? isset($info['related_to']) : $field;
+        $related_meta = $ds->_get_meta($related_table);
+        if ($related_meta['key'] != $field)
+            {
+            $related_meta['real_key'] = $related_meta['key'];
+            $related_meta['key'] = $field;
+            }
+        $tmp_select = $info['select'];
+        // multiple select fields first need to be concatenated with CONCAT_WS
+        if (strpos($info['select'], ',') !== FALSE)
+            $tmp_select = "CONCAT_WS(' @@ ', $info[select])";
+        $result =  "(SELECT GROUP_CONCAT($tmp_select SEPARATOR ' @@ ') FROM $related_meta[mysql_table]";
+        // M:M fields - get the join and where clauses
+        if ($type == 'many_to_many')
+            {
+            if (isset($info['join']))
+                $related_join = $info['join'];
+            else
+                {
+                // find the url field
+                $url_field = 'id';
+                foreach ($related_meta['fields'] as $related_field=>$related_info)
+                    {
+                    if ($related_field == 'url' && isset($related_info['select']))
+                        $url_field = $related_info['select'];
+                    }
+                $related_join = "JOIN $info[link] ON $info[link].{$info['keys'][1]}=".
+                                "$related_meta[mysql_table].$url_field";
+                }
+            $result .= " $related_join WHERE $info[link].{$info['keys'][0]}=t.id";
+            }
+        // 1:M fields - get the where clause
+        else
+            $result .= " WHERE $related_meta[mysql_table].$info[foreign_key]=t.id";
+        // additional where clause
+        // TODO: Check for 'group' and 'order' clauses - is this needed??
+        if (isset($info['where']))
+            $result .= " AND $info[where]";
+        $result .= ") AS $field";
+        $select[] = $result; 
+        }
+    // M:1 fields
+    else if ($type == 'many_to_one')
+        {
+        $select[] = $info['select'];
+        $join[] = $info['join'];
+        }
+    // const field - is this needed??
+    else if ($type == 'const')
+        $select[] = "'".addslashes($info['value'])."' AS ".$field;
+    // sql - is this needed??
+    else if ($type == 'sql')
+        $select[] = $info['value'].' AS '.$field;
+    // regular fields
+    else
+        {
+        // check for designated mysql field
+        if (isset($info['mysql_field']))
+            $select[] = 't.'.$info['mysql_field'];
+        else
+            $select[] = 't.'.$field;
+        }
+    }
+
+$ints = Array();
+$bools = Array();
+$dates = Array();
+$ords = Array();
+$mvas = Array();
+
+// Process the search indexes
+foreach ($meta['search']['index'] as $field=>$info)
+    {
+    $type = @$info['type'];
+    $field_name = @$info['fields'];
+    $original_name = $field_name;
+    // look for sphinx field name override
+    if (isset($info['sphinx_fields']))
+        $field_name = $info['sphinx_fields'];
+    // strip 't.' from the field name if present
+    if (strpos($field_name, 't.') === 0)
+        $field_name = substr($field_name, 2);
+    
+    // integer/boolean
+    if ($type == 'number')
+        {
+        // attempt to see if this is actually a boolean field
+        if (@$meta['fields'][$field]['type'] == 'boolean' || @$meta['fields'][$field_name]['type'] == 'boolean')
+            $bools[] = "sql_attr_bool    = $field_name";
+        else
+            $ints[] = "sql_attr_uint    = $field_name";
+        }
+    // dates
+    else if ($type == 'date' || $type == 'datetime')
+        {
+        // check if this date field is already present as a select statement
+        if (in_array($field_name, $select))
+            $key = array_search($field_name, $select);
+        else if (in_array($original_name, $select))
+            $key = array_search($original_name, $select);
+        $tmp = "UNIX_TIMESTAMP($original_name) AS $field_name";
+        // replace the existing select field if found
+        if ($key)
+            $select[$key] = $tmp;
+        else
+            $select[] = $tmp;
+        $dates[] = "sql_attr_timestamp    = $field_name";
+        }
+    // sql_attr_str2ordinal values for sorting by title
+    // this only looks for sorting by a 'title' field which will cover most modules
+    else if ($field == 'sort.title')
+        {
+        $tmp = (strpos($field_name, '_ord') !== FALSE) ? $field_name : $field_name.'_ord';
+        // sphinx sort is case-sensitive (byte based), so convert to lower case
+        $select[] = "LOWER($original_name) AS $tmp";
+        $ords[] = "sql_attr_str2ordinal    = $tmp";
+        }
+    }
+
+// get facet details (added as select field) and facet summary (added as multi-value attribute)
+if (isset($meta['facets']))
+    {
+    $details = Array();
+    $facets = Array();
+    foreach ($meta['facets'] as $value=>$facet)
+        {
+        if ($value == 'count')
+            continue;
+        $details[] = ($facet['select'] == 'all') ? $value : "IF($facet[select],$value,0)";
+        if ($facet['select'] != 'all')
+            $facets[] = "(SELECT t.id, $value FROM $meta[mysql_table] t WHERE $facet[select])";
+        }
+    if (!empty($details))
+        {
+        $details = join(" | \\\n        ", $details);
+        $select[] = "$details AS facet_details";
+        $ints[] = "sql_attr_uint    = facet_details";
+        }
+    if (empty($facets))
+        $facets[] = "(SELECT t.id, 0 FROM $meta[mysql_table] t)";
+    $tmp = "sql_attr_multi = uint facets from query; \\\n";
+    $tmp .= join(" \\\nUNION ", $facets);
+    $mvas[] = $tmp;
+    }
+
+// check for duplicates
+if (count($select) != count(array_unique($select)))
+    print("Warning: duplicate select values detected\n");
+
+$sql_query = "SELECT \\\n    ";
+$sql_query .= join(", \\\n    ", $select);
+$sql_query .= " \\\nFROM $meta[mysql_table] t";
+if (!empty($join))
+    $sql_query .= " \\\n".join(" \\\n", $join);
+$sql_query .= "\n";
+$template = str_replace('@@sql_query@@', $sql_query, $template);
+
+$template = str_replace('# @@sql_attr_uint@@', join("\n    ", $ints), $template);
+$template = str_replace('# @@sql_attr_bool@@', join("\n    ", $bools), $template);
+$template = str_replace('# @@sql_attr_timestamp@@', join("\n    ", $dates), $template);
+$template = str_replace('# @@sql_attr_str2ordinal@@', join("\n    ", $ords), $template);
+$template = str_replace('# @@sql_attr_multi@@', join("\n    ", $mvas), $template);
+
+// write the finished template to the conf file
+if (!$new_file = @fopen($filename, "w"))
+    {
+    echo "Cannot open file ($filename)\n";
+    exit;
+    }
+fwrite($new_file, $template);
+fclose($new_file);
+
+?>

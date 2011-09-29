@@ -1,0 +1,54 @@
+#! /bin/bash
+# $Id$
+# Test the Hermes database conversion
+# Phil Hansen, 31 Mar 09
+# BUFVC Potnia copyright 2011, BUFVC et al. See LICENSE for licensing information (GPL3). See http://potnia.org, http://bufvc.ac.uk
+
+set +x 
+
+basedir=$(cd $(dirname $0)/..; pwd)
+cd $basedir
+
+OLDDBNAME=unit_test
+NEWDBNAME=unit_test2
+EXPECTEDDBNAME=unit_test3
+
+# Keep dump files if -k flag
+if [[ "$1" == "-k" ]]; then KEEP_FILES=1; fi
+
+# This script will test the conversion of the Shakespeare database
+# from the old version (bufvc_core) to the new schema.
+# It uses provided schemas:
+#       sql/schema.sql - schema for new db
+#       sql/test_legacy_data.sql - old schema and data for testing
+#       sql/test_converted_legacy_data.sql - expected result (uses schema.sql for schema)
+
+# Create databases
+mysqladmin -uroot  -f drop ${NEWDBNAME} &>/dev/null
+mysqladmin -uroot  create ${NEWDBNAME} &>/dev/null
+mysqladmin -uroot  -f drop ${OLDDBNAME} &>/dev/null
+mysqladmin -uroot  create ${OLDDBNAME} &>/dev/null
+mysqladmin -uroot  -f drop ${EXPECTEDDBNAME} &>/dev/null
+mysqladmin -uroot  create ${EXPECTEDDBNAME} &>/dev/null
+
+# Import schema and data
+mysql -uroot --default-character-set=latin1 ${NEWDBNAME} < sql/schema.sql
+mysql -uroot --default-character-set=latin1 ${OLDDBNAME} < sql/test_legacy_data.sql # schema and data
+mysql -uroot --default-character-set=latin1 ${EXPECTEDDBNAME} < sql/schema.sql
+mysql -uroot --default-character-set=latin1 ${EXPECTEDDBNAME} < sql/test_converted_legacy_data.sql
+
+# Run the convert script
+bin/convert_database ${OLDDBNAME} ${NEWDBNAME}
+
+# Check that the two are the same
+mysqldump --skip-opt -uroot  ${NEWDBNAME}|grep -v '^--.*' &> dump1
+mysqldump --skip-opt -uroot  ${EXPECTEDDBNAME}|grep -v '^--.*' &> dump2
+if ! diff dump1 dump2 ; then echo Hermes Convert test: Failed; fi
+
+# Clean up
+if [ -z $KEEP_FILES ]; then
+    rm -f dump1 dump2
+    mysqladmin -uroot  -f drop ${NEWDBNAME} &>/dev/null
+    mysqladmin -uroot  -f drop ${EXPECTEDDBNAME} &>/dev/null
+    mysqladmin -uroot  -f drop ${OLDDBNAME} &>/dev/null
+fi

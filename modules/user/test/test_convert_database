@@ -1,0 +1,311 @@
+#! /bin/bash
+# $Id$
+# Test user database conversion
+# James Fryer, 25 June 09
+# BUFVC Potnia copyright 2011, BUFVC et al. See LICENSE for licensing information (GPL3). See http://potnia.org, http://bufvc.ac.uk
+
+set +x 
+
+basedir=$(cd $(dirname $0)/..; pwd)
+cd $basedir
+
+TESTDBNAME=unit_test
+EXPECTEDDBNAME=unit_test2
+
+# Keep dump files if -k flag
+if [[ "$1" == "-k" ]]; then KEEP_FILES=1; fi
+
+# Test a conversion. Expects the name of the test as an arg, with the 
+# SQL on stdin in the format:
+# Original data
+# %% delimiter
+# Expected data
+function test_convert()
+    {
+    TEST=$1
+    
+    # Set up the databases
+    mysqladmin -utest -f drop $TESTDBNAME &>/dev/null
+    mysqladmin -utest create $TESTDBNAME
+    mysql -utest $TESTDBNAME < test/unconverted_schema.sql
+
+    mysqladmin -utest -f drop $EXPECTEDDBNAME &>/dev/null
+    mysqladmin -utest create $EXPECTEDDBNAME
+    mysql -utest $EXPECTEDDBNAME < sql/user_schema.sql
+    mysql -utest $EXPECTEDDBNAME < sql/bufvc_user_schema.sql
+    
+    # Split the test data
+    awk 'BEGIN {f="junk.sql."++d} /^%%/{close(f); f="junk.sql."++d} ! /^%%/{print > f} '
+    
+    mysql -utest $TESTDBNAME < junk.sql.1
+    mysql -utest $EXPECTEDDBNAME < junk.sql.2
+    
+    # Run the conversion script
+    $basedir/bin/convert_bufvc_database -nopurge $TESTDBNAME 
+    
+    # Check that the two are the same
+    mysqldump --skip-opt -uroot  $TESTDBNAME|grep -v '^--.*' &> dump1
+    mysqldump --skip-opt -uroot  $EXPECTEDDBNAME|grep -v '^--.*' &> dump2
+    if ! diff dump1 dump2 ; then echo "Failed: $TEST"; fi
+
+    # Clean up
+    if [ -z $KEEP_FILES ]; then
+        rm -f dump{1,2} junk.sql.{1,2}
+        mysqladmin -uroot  -f drop ${TESTDBNAME} &>/dev/null
+        mysqladmin -uroot  -f drop ${EXPECTEDDBNAME} &>/dev/null
+    fi
+    }
+
+# Helper functions return SQL data
+# Args: $1=priv_id, $2=offair_rep (opt) $3, $4 = offair rep notifications/status notifs (opt)
+function unconverted_user_data
+    {
+    priv_id=$1
+    if [ -z "$2" ]; then offair_rep=0; else offair_rep=$2; fi
+    if [ -z "$3" ]; then offair_rep_notifications=1; else offair_rep_notifications=$3; fi
+    if [ -z "$4" ]; then offair_rep_status_change_notifications=0; else offair_rep_status_change_notifications=$4; fi    
+    echo "id = 456,
+    priv_id = $priv_id,
+    status_id = 2, # Active, ignored
+    auth_id = 2, # Ignored
+    login_name = 'normal_user', 
+    password = 'ignored',
+    email = 'foo@example.com',
+    name = 'Normal User',
+    comment = 'Ignored',
+    data = '',
+    institution_id = 123,
+    offair_rep = $offair_rep,
+    telephone_number = '789',
+    offair_rep_notifications = $offair_rep_notifications,
+    offair_rep_status_change_notifications = $offair_rep_status_change_notifications
+    "
+    }
+    
+# Args: $1=is_root $2=offair_notifications (opt)
+function converted_user_data
+    {
+    is_root=$1
+    if [ -z "$2" ]; then offair_notifications=1; else offair_notifications=$2; fi
+    echo "id = 456,
+    login = 'normal_user', 
+    email = 'foo@example.com',
+    name = 'Normal User',
+    root = $is_root,
+    institution_id = 123,
+    telephone_number = '789',
+    offair_notifications=$offair_notifications
+    "
+    }
+
+#----------------------------------
+# TESTS START HERE
+#----------------------------------
+
+test_convert normal_user << _EOT_
+INSERT INTO 
+    User 
+SET 
+    $(unconverted_user_data 2) # 2 = normal user
+;
+%%
+INSERT INTO 
+    User 
+SET 
+    $(converted_user_data 0)
+;
+INSERT INTO 
+    UserRight
+VALUES
+    (456, 1)   # save_data
+;    
+_EOT_
+
+
+test_convert admin_user << _EOT_
+INSERT INTO 
+    User 
+SET 
+    $(unconverted_user_data 5) # 5 = admin
+;
+%%
+INSERT INTO 
+    User 
+SET 
+    $(converted_user_data 1)
+;
+INSERT INTO 
+    UserRight
+VALUES
+    (456, 1)   # save_data
+;    
+_EOT_
+
+
+test_convert editor_user << _EOT_
+INSERT INTO 
+    User 
+SET 
+    $(unconverted_user_data 3) # 3 = editor
+;
+%%
+INSERT INTO 
+    User 
+SET 
+    $(converted_user_data 0)
+;
+INSERT INTO 
+    UserRight
+VALUES
+    (456, 1),  # save_data
+    (456, 2)   # edit_record
+;    
+_EOT_
+
+
+test_convert offair_admin_user << _EOT_
+INSERT INTO 
+    User 
+SET 
+    $(unconverted_user_data 4) # 4 = OA admin
+;
+%%
+INSERT INTO 
+    User 
+SET 
+    $(converted_user_data 0)
+;
+INSERT INTO 
+    UserRight
+VALUES
+    (456, 1),  # save_data
+    (456, 2),  # edit_record
+    (456, 6)   # offair_admin
+;    
+_EOT_
+
+
+test_convert offair_rep_user << _EOT_
+INSERT INTO 
+    User 
+SET 
+    $(unconverted_user_data 2 1) # 2 = normal user
+;
+%%
+INSERT INTO 
+    User 
+SET 
+    $(converted_user_data 0)
+;
+INSERT INTO 
+    UserRight
+VALUES
+    (456, 1),  # save_data
+    (456, 5)   # offair_rep
+;    
+_EOT_
+
+
+# NB a user would normally be a rep with these flags set but this is omitted for clarity
+test_convert offair_notifications_none << _EOT_
+INSERT INTO 
+    User 
+SET 
+    $(unconverted_user_data 2 0 0 0) # normal user, not rep, no notifs
+;
+%%
+INSERT INTO 
+    User 
+SET 
+    $(converted_user_data 0 0)
+;
+INSERT INTO 
+    UserRight
+VALUES
+    (456, 1)  # save_data
+;    
+_EOT_
+
+
+test_convert offair_notifications_status_only << _EOT_
+INSERT INTO 
+    User 
+SET 
+    $(unconverted_user_data 2 0 0 1) 
+;
+%%
+INSERT INTO 
+    User 
+SET 
+    $(converted_user_data 0 2)
+;
+INSERT INTO 
+    UserRight
+VALUES
+    (456, 1)  # save_data
+;    
+_EOT_
+
+
+test_convert offair_notifications_all << _EOT_
+INSERT INTO 
+    User 
+SET 
+    $(unconverted_user_data 2 0 1 1)
+;
+%%
+INSERT INTO 
+    User 
+SET 
+    $(converted_user_data 0 3)
+;
+INSERT INTO 
+    UserRight
+VALUES
+    (456, 1)  # save_data
+;    
+_EOT_
+
+
+### Removed this test as it is too fragile
+### test_convert user_data << _EOT_
+### INSERT INTO 
+###     User 
+### SET 
+###     $(unconverted_user_data 2) # 2 = normal user
+### ;
+### UPDATE 
+###     User 
+### SET
+###     data='a:5:{s:9:"page_size";s:3:"100";s:14:"saved_searches";O:9:"QueryList":4:{s:7:"queries";a:1:{i:0;O:5:"Query":26:{s:11:"is_advanced";s:1:"0";s:5:"terms";a:1:{i:0;s:20:"calypso* OR trinidad";}s:7:"filters";a:3:{i:0;N;i:1;N;i:2;N;}s:9:"operators";a:1:{i:0;s:0:"";}s:10:"start_date";i:0;s:8:"end_date";i:0;s:13:"relative_date";i:86400;s:17:"use_relative_date";b:1;s:6:"medium";s:2:"TR";s:13:"enhanced_only";i:0;s:8:"order_by";s:4:"DATE";s:11:"bcast_limit";s:3:"ALL";s:11:"offair_only";b:0;s:7:"ou_only";b:0;s:9:"genre_ids";a:0:{}s:11:"channel_ids";a:0:{}s:13:"qualifier_ids";a:0:{}s:12:"has_executed";b:0;s:7:"results";N;s:13:"results_count";i:0;s:9:"db_result";N;s:10:"result_num";i:0;s:10:"page_start";i:0;s:13:"error_message";N;s:5:"error";b:0;s:15:"alert_is_active";i:1;}}s:9:"query_num";i:1;s:9:"alert_day";s:1:"3";s:8:"max_size";i:0;}s:18:"listings_multi_ids";a:5:{i:0;i:106;i:1;i:138;i:2;s:2:"54";i:3;s:2:"68";i:4;s:3:"175";}s:19:"listings_single_ids";a:1:{i:0;s:2:"66";}s:17:"listings_genre_id";s:4:"1007";}'
+### WHERE 
+###     id=456;
+### %%
+### INSERT INTO 
+###     User 
+### SET 
+###     $(converted_user_data 0)
+### ;
+### INSERT INTO 
+###     UserData
+### SET
+###     user_id = 456,
+###     name = 'saved_searches',
+###     value= 'O:9:"QueryList":2:{s:7:"queries";a:1:{i:0;a:6:{s:4:"text";s:46:"<b>Search for</b>: calypso* OR trinidad<br />
+### ";s:3:"url";s:68:"http://mento.invocrown.com/bufvc/search.php?q=calypso%2A+OR+trinidad";s:4:"info";a:12:{s:13:"results_count";i:0;s:8:"accuracy";N;s:10:"page_count";i:0;s:13:"page_prev_url";N;s:13:"page_next_url";N;s:14:"page_first_url";N;s:13:"page_last_url";N;s:9:"page_urls";a:0:{}s:12:"page_message";N;s:15:"results_message";s:10:"No results";s:13:"first_in_page";i:0;s:12:"last_in_page";N;}s:8:"criteria";a:11:{s:1:"q";s:20:"calypso* OR trinidad";s:4:"date";N;s:6:"offair";N;s:7:"openuni";N;s:8:"enhanced";N;s:8:"progtype";N;s:8:"category";N;s:7:"country";N;s:7:"channel";N;s:6:"source";N;s:4:"sort";N;}s:6:"module";s:5:"trilt";s:5:"title";s:5:"TRILT";}}s:5:"limit";i:-1;}'
+### ;
+### INSERT INTO 
+###     UserData
+### SET
+###     user_id = 456,
+###     name = '_prefs',
+###     value= 'a:2:{s:17:"listings_channels";a:5:{i:0;i:106;i:1;i:138;i:2;s:2:"54";i:3;s:2:"68";i:4;s:3:"175";}s:16:"saved_search_day";s:1:"3";}'
+### ;
+### INSERT INTO 
+###     UserData
+### SET
+###     user_id = 456,
+###     name = 'saved_searches_active',
+###     value= 'a:1:{i:0;s:1:"1";}'
+### ;
+### _EOT_

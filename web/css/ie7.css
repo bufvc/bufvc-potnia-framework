@@ -1,0 +1,24 @@
+/* gives hr same size as it is in modern browsers */
+hr { height:1px; }
+hr.site-location { height:4px; margin-bottom:-7px;margin-top:-7px; }
+.title-project { padding:6px 12px 4px 56px; }
+#q, #submit {zoom:1;}
+#submit{ outline:0px solid transparent; padding:6px 8px; }
+.collections-list li { margin:1em 5% 0 0; padding:0 0 0.5em 0px; }
+.record a { position:relative; }
+.paging .spacer { margin-top:-4px; margin-bottom:4px; padding-top:4px; padding-bottom:4px; }
+.contnav li { zoom:1; }
+fieldset { }
+legend { margin-left:-6px; }
+
+.showonlystories-set legend { padding-top:0px; margin-left:-10px; margin-top:-20px; }
+.showonlystories-set { margin-top:20px; padding-bottom:10px; padding-top:4px; }
+/*--- Reset to static, IE doesn't like the absolute positioning ---*/
+#beta-wrapper { position:relative; }
+#beta {padding-bottom:5px;}
+.page { margin-top:-20px; }
+
+/* ------ advaced search form IE only styles -----*/
+span.tag-container{ position:absolute;}
+span.tag-container, span.tag-selected { padding-top:0px; line-height:1.75; padding-bottom:0px; margin:0; }
+.advanced-menu-options li {float:left;}

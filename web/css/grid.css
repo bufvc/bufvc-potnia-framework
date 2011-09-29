@@ -1,0 +1,206 @@
+/* #-----  GRID --------# */
+	/*---- Columns ----*/
+
+	/* Use this class on any div.span / container to see the grid. */
+.showgrid { background-image: url(../components/grid.png);  }
+
+	/* Sets up basic grid floating and margin. */
+	div.column_1, div.column_2, div.column_3, div.column_4, div.column_5, 
+	div.column_6, div.column_7, div.column_8, div.column_9, div.column_10, 
+	div.column_11, div.column_12, div.column_13, div.column_14, div.column_15, 
+	div.column_16, div.column_17, div.column_18, div.column_19, div.column_20, 
+	div.column_21, div.column_22, div.column_23, div.column_24,
+	div.container_summary_of_page  {
+	float: left;
+	margin-right: 10px; 
+	}
+	
+/* IE 6 would struggle without this ...
+	* html div.column_1, * html div.column_2, * html div.column_3, * html div.column_4, * html div.column_5, * html div.column_6, * html div.column_7, * html div.column_8, * html div.column_9, * html div.column_10, * html div.column_11, * html div.column_12, * html div.column_13, * html div.column_14, * html div.column_15, * html div.column_16, * html div.column_17, * html div.column_18, * html div.column_19, * html div.column_20, * html div.column_21, * html div.column_22, * html div.column_23, * html div.column_24 {
+	overflow:hidden; 
+	}  */
+	
+.stickybox {overflow:hidden;}
+
+	/* The last column in a row needs this class. */
+div.last_column, div.column_24 { margin-right: 0; }
+
+	/* Use these classes to set the width of a column. */
+	.column_1  { width: 30px; }
+	.column_2  { width: 70px; }
+	.column_3  { width: 110px; }
+	.column_4  { width: 150px; }
+	.column_5  { width: 190px; }
+	.column_6  { width: 230px; }
+	.column_7  { width: 270px; }
+	.column_8  { width: 310px; }
+	.column_9  { width: 350px; }
+	.column_10 { width: 390px; }
+	.column_11 { width: 430px; }
+	.column_12 { width: 470px; }
+	.column_13 { width: 510px; }
+	.column_14 { width: 550px; }
+	.column_15 { width: 590px; }
+	.column_16 { width: 630px; }
+	.column_17 { width: 670px; }
+	.column_18 { width: 710px; }
+	.column_19 { width: 750px; }
+	.column_20 { width: 790px; }
+	.column_21 { width: 830px; }
+	.column_22 { width: 870px; }
+	.column_23 { width: 910px; }
+	.column_24 { width: 950px; margin: 0; }
+
+	/* Add these to a column to append empty cols. */
+	.append-1  { padding-right: 40px; }  
+	.append-2  { padding-right: 80px; } 
+	.append-3  { padding-right: 120px; } 
+	.append-4  { padding-right: 160px; } 
+	.append-5  { padding-right: 200px; } 
+	.append-6  { padding-right: 240px; } 
+	.append-7  { padding-right: 280px; } 
+	.append-8  { padding-right: 320px; } 
+	.append-9  { padding-right: 360px; } 
+	.append-10 { padding-right: 400px; } 
+	.append-11 { padding-right: 440px; } 
+	.append-12 { padding-right: 480px; } 
+	.append-13 { padding-right: 520px; } 
+	.append-14 { padding-right: 560px; } 
+	.append-15 { padding-right: 600px; } 
+	.append-16 { padding-right: 640px; } 
+	.append-17 { padding-right: 680px; } 
+	.append-18 { padding-right: 720px; } 
+	.append-19 { padding-right: 760px; } 
+	.append-20 { padding-right: 800px; } 
+	.append-21 { padding-right: 840px; } 
+	.append-22 { padding-right: 880px; } 
+	.append-23 { padding-right: 920px; } 
+
+	/* Add these to a column to prepend empty cols. */
+	.prepend-1  { padding-left: 40px; }  
+	.prepend-2  { padding-left: 80px; } 
+	.prepend-3  { padding-left: 120px; } 
+	.prepend-4  { padding-left: 160px; } 
+	.prepend-5  { padding-left: 200px; } 
+	.prepend-6  { padding-left: 240px; } 
+	.prepend-7  { padding-left: 280px; } 
+	.prepend-8  { padding-left: 320px; } 
+	.prepend-9  { padding-left: 360px; } 
+	.prepend-10 { padding-left: 400px; } 
+	.prepend-11 { padding-left: 440px; } 
+	.prepend-12 { padding-left: 480px; } 
+	.prepend-13 { padding-left: 520px; } 
+	.prepend-14 { padding-left: 560px; } 
+	.prepend-15 { padding-left: 600px; } 
+	.prepend-16 { padding-left: 640px; } 
+	.prepend-17 { padding-left: 680px; } 
+	.prepend-18 { padding-left: 720px; } 
+	.prepend-19 { padding-left: 760px; } 
+	.prepend-20 { padding-left: 800px; } 
+	.prepend-21 { padding-left: 840px; } 
+	.prepend-22 { padding-left: 880px; } 
+	.prepend-23 { padding-left: 920px; } 
+
+
+	/* Border on right hand side of a column. */
+div.border {
+	padding-right: 4px;
+	margin-right: 5px;
+	border-right: 1px solid #eee;
+	}
+
+	/* Border with more whitespace, spans one column. */
+div.colborder {
+	padding-right: 24px;
+	margin-right: 25px;
+	border-right: 1px solid #eee;
+	}
+
+
+	/* Use these classes on an element to push it into the 
+	next column, or to pull it into the previous column.  */
+
+	.pull-1 { margin-left: -40px; }
+	.pull-2 { margin-left: -80px; }
+	.pull-3 { margin-left: -120px; }
+	.pull-4 { margin-left: -160px; }
+	.pull-5 { margin-left: -200px; }
+
+.pull-1, .pull-2, .pull-3, 
+.pull-4, .pull-5, .pull-5 {
+	float:left;
+	position:relative;
+	}
+
+	.push-1 { margin: 0 -40px 1.5em 40px; }
+	.push-2 { margin: 0 -80px 1.5em 80px; }
+	.push-3 { margin: 0 -120px 1.5em 120px; }
+	.push-4 { margin: 0 -160px 1.5em 160px; }
+	.push-5 { margin: 0 -200px 1.5em 200px; }
+
+	.push-0, .push-1, .push-2, 
+	.push-3, .push-4, .push-5 { 
+	float: right;
+	position:relative;
+	}
+
+
+	/* Misc classes and elements
+	-------------------------------------------------------------- */
+
+	/* Use a .box to create a padded box inside a column.  */ 
+.box { 
+	padding: 1.5em; 
+	margin-bottom: 1.5em; 
+	background: #E5ECF9; 
+	border:1px solid #BBB;
+	}
+
+.stickybox {
+	padding:10px;
+	border:1px solid #CCC; 
+	margin-bottom:10px;
+	height:auto;
+	min-height:150px;
+	background-color:white;
+	background:#FFF url(../components/bg_stickybox_title.png) repeat-x left bottom;
+	}
+	
+.news_box {
+	background: transparent url(../components/bg_news_box.png) no-repeat left top;
+	padding:10px; 
+	border: 1px solid #EEE;
+	}
+
+.nopadding {padding:0;}
+
+.welcome_box {
+	background:#fefefe none;}
+
+.welcome_box h2 {
+	font-weight:normal;
+	 }
+
+/* -------------- content ------------------*/
+
+
+/* ---------- Utilities ------------------*/
+
+
+/* Regular clearing
+	apply to column that should drop below previous ones. */
+
+.clear { clear:both; }
+	
+.homepage .page {
+	background-color:#40464D;
+	background-color:#FAFBFD;
+	}
+.stickybox, .welcome_box, .news_box, .sidebar, div.post_Homepage, .content_navigation_column {
+	-moz-border-radius:8px;
+	-webkit-border-radius:8px;
+}
+
+
+
+/* #----- end of GRID ------# */

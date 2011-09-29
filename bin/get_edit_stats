@@ -1,0 +1,49 @@
+#! /usr/bin/php -q
+<?php
+// $Id$
+// Edit log processor
+// Phil Hansen, 26 May 09, James Fryer 2010-02-15
+// BUFVC Potnia copyright 2011, BUFVC et al. See LICENSE for licensing information (GPL3). See http://potnia.org, http://bufvc.ac.uk
+
+// Processes a log file and outputs information in a tab-separated format
+
+$usage = "Usage: get_edit_stats [file]\n";
+$usage .= "If no file is specified stdin will be used.\n";
+
+// Get data
+if (@$argv[1] == '-h')
+    die($usage);
+else if (@$argv[1])
+    $filename = $argv[1];
+$lines = read_input(@$filename);
+
+// print header line (fields are separated by tabs)
+$header = "date\ttime\ttimezone\tip\tmodule\tuser\taction\turl";
+print($header . "\n");
+
+// storage hash table
+$stats = Array();
+
+foreach ($lines as $line)
+    {
+    if (empty($line))
+        continue;
+    list($date, $time, $timezone, $ip, $module, $user, $type, $action, $url, $remainder) = explode(' ', $line, 10);
+    if ($type == 'EDIT')
+        {
+        // Normalise action string
+        $action = str_replace(':', '', $action);
+        print("$date\t$time\t$timezone\t$ip\t$module\t$user\t$action\t$url\n");
+        }
+    }
+
+/// Read from a file or stdin if no file defined
+/// Return an array of lines
+function read_input($filename=NULL)
+    {
+    if ($filename == '')
+        $filename = 'php://stdin';
+    return file($filename, FILE_IGNORE_NEW_LINES);
+    }
+
+?>

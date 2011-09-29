@@ -1,0 +1,389 @@
+html{color:#000;background:#FFF;}
+body,div,dl,dt,dd,ul,ol,li,h1,h2,h3,h4,h5,h6,pre,code,form,fieldset,legend,input,textarea,p,blockquote,th,td{margin:0;padding:0;}
+table{border-collapse:collapse;border-spacing:0;}
+fieldset,img{border:0;}
+address,caption,cite,code,dfn,em,strong,th,var{font-style:normal;font-weight:normal;}
+li{list-style:none;}
+caption,th{text-align:left;}h1,h2,h3,h4,h5,h6{font-size:100%;font-weight:normal;}
+q:before,q:after{content:'';}
+abbr,acronym{border:0;font-variant:normal;}sup{vertical-align:text-top;}sub{vertical-align:text-bottom;}input,textarea,select{font-family:inherit;font-size:inherit;font-weight:inherit;}input,textarea,select{*font-size:100%;}legend{color:#000;}del,ins{text-decoration:none;}a img{border:none}
+ 
+ 
+/* ##------  The basics  ------## */
+body, html { 
+	background: #B4B8BD; 
+	color:#333333; 
+	font-family: Arial, 'Arial', Helvetica, sans-serif; 
+	margin-bottom:12px;}
+	
+body { font-size:75%; line-height:1.5em; *font-size:smallest; *font:x-smallest; }
+html > body { font-size:12px; } 
+ 
+h1 { font-size:2.0em; line-height: 1em; margin-top: 0; margin-bottom: 1em;}
+ 
+h2 { font-size:1.66em; 
+    line-height: 1.286em;
+    padding-top: 0;
+    padding-bottom: 0; }
+    
+h3 { font-size:1.33em; 
+    padding-top: 0.5em;
+    padding-bottom: 0.5em; 
+    }
+    
+h2, h3, h4, h5, h6 {font-weight:bold;}
+ 
+h4 {font-size:1.0em;}
+h5 {font-size:0.83em;}
+h6 {font-size:0.66em;}
+ 
+p { font-size:1em; margin-top:0; margin-bottom:0.5em;}
+ 
+a:hover { text-decoration:underline; }
+	
+ul { list-style-type: none; margin:0; padding:0; } 
+ 
+li {  display:inline; }
+	
+/* select, input, button, textarea { font:1.0em arial,helvetica,clean,sans-serif; } */
+select {font-size:1em;}
+th {font-weight:bold;}
+	
+/* ##------  The Structure  ------## */
+.help_popup {background: white;}
+ 
+.page, .help_navigation {width:974px;}
+ 
+.page {
+	margin:0 auto;
+	padding-:0 12px;
+	background:#FFF;
+	text-align:left;
+	overflow:hidden; text-align:center; background-color:#FFF; 
+	border:1px solid #999;}
+ 
+.container { width:950px; background-color:#FFF; text-align:left; margin:0 auto; overflow:hidden; padding:0 0 0 0;}
+ 
+.head { position:relative; margin-top:8px; padding-bottom:6px; _padding-bottom:18px; text-align:left;}
+.bufvc, .slogan {font-family:'Gill', 'Gill Sans', 'Gill Sans MT', 'Calibri', Arial; margin:0; padding:0; color:#3A3A3A; float:left; margin-left:10px; _letter-spacing: -0.05em; }
+.bufvc {font-weight:bold; font-size:18px; line-height:1.0em; margin-top:8px; width:70%;  _font-size:1.5em; cursor: pointer;}
+.slogan {font-size:12px; line-height:1.0em; _font-size:0.83em;}
+.brand {list-style: none; margin:0; padding:0; text-decoration:none; }
+.brand {width:30em; border-: 1px solid #999; float:left; margin:12px 0 12px 12px; display:inline; }
+.brand img {float:left; border:0; width:5.583em; height:5.833em; min-height:70px; min-width:67px; background-image: none; } 
+ 
+.brand a {text-decoration:none; color:#3A3B3C;}
+.bulogo {float:right; margin:0; padding:10px 0 0 0;}
+ 
+ 
+/***-------------------------------------
+ APP STARTS HERE-------------------------- ***/
+
+/* JF: added to restrict width of buttons in IE6 */
+input.ie-fix {
+    width: 140px;
+}
+.app-menu, .app-tools { 
+	float:left; width:95%;
+	border-bottom:1px solid #BBB; 
+    margin-bottom:20px; 
+	display:inline; 
+	}
+
+.app-menu li a { 
+    padding:5px 10px; 
+    border-top:1px solid #BBB; 
+    *height:1.5em; 
+	background-color:#FFF; 
+    text-decoration:none; 
+    overflow:hidden;
+    display:block; 
+    color:#4D4D4D; 
+    }
+
+.app-menu li.separator a { 
+	border-top:1px solid #888; 
+	}
+
+.app-menu ul { 
+    padding-left:20px; 
+    }
+    
+.app-menu li a:hover, 
+.app-menu li a:focus,
+.app-menu li a:active
+ {
+	color:#FFF; 
+	background-color:#666498;
+	}
+
+.app-tools li{ 
+    padding:5px 10px; 
+    border-top:1px solid #BBB; 
+    *height:1.5em; 
+    display:block; 
+    color:#4D4D4D; 
+    }
+
+.app-tools h1 {
+    font-size:10pt; 
+    font-weight: bold;
+    line-height: 1em; 
+    margin-top: 0; 
+    margin-bottom: 0.2em;
+    }
+
+.app-tools h1 a {
+    text-decoration: none;
+    }
+
+/* JF: Query summary */
+dl.query dt {
+    font-weight: bold;
+    }
+
+/* JF: sidebar, query enhancers */
+.sidebar h1 {
+    font-size:12pt; 
+    font-weight: bold;
+    line-height: 1em; 
+    margin-top: 0; 
+    margin-bottom: 0.2em;
+    }
+.sidebar ul { 
+    padding-left:10px; 
+    }
+.sidebar li{ 
+    display:block; 
+    color:#4D4D4D; 
+    }
+
+.query-enhancer {
+    background-color: none;
+	border:2px dotted #E5E7F2; 
+    }
+
+/* JF: checkboxes */
+.checkboxes li {
+    padding-right: 0.5em;
+    white-space: nowrap;
+    }
+    
+/*--- general ----*/
+/* .controls h1, 
+.controls h2, 
+.controls h3, .controls p, 
+*/
+.controls dt, 
+.controls dd,  
+.controls h4 { 
+	margin:0; padding:0; }
+h1, h2, h3 {color:#4f5897;}
+.title_project {color:#4A4A4A;background-color:#E9EBF6;padding:5px 0 5px 5px; border-bottom:0px solid #BBB;}
+ 
+/*--- result list for inc-util.php ----*/
+p.description {}
+ 
+.querylist { border-top:1px solid #EEE; margin-top:0.75em; padding-top:0.75em; padding-left:20px;}
+.querylist dl { margin-bottom:0.75em; border-bottom:1px solid #EEE; padding-bottom:0.75em;}
+.results {}
+.results h3 {padding: 0}
+.results li {
+	padding-bottom:12px; 
+	margin-top:12px; 
+	display:block; 
+	border-bottom:1px 
+	dotted #BBB; }
+.results li a, .record a, .help_popup a {color:#003399; text-decoration:none; }
+.results li a:hover, .results li a:focus, .record a:focus, .record a:hover, .help_popup a:hover, .help_popup a:focus {color:#245DCE; text-decoration:underline;} 
+.results li a:active, .record a:active, .help_popup a:active { color:#363E81; }
+.results li h3,.results li h4,h3.title_record {margin:0.05em 0; font-weight:normal;}
+.results li input {float: left; margin: 0.1em 0.1em 0.1em 0;}
+.results li h4 {font-style: italic;}
+.results li dl {
+    padding: 0;
+  }
+.results li dt {
+    float: left;
+    clear: left;
+    margin-right: 0.3em;
+    font-weight: bold;
+    color:#4f5897;
+}
+.results li dt:after {
+    content: ":";
+  }
+.results li dd {
+    margin-left: 1.5em;
+}
+
+.paging {
+	margin:0 0 0.5em 0;
+	padding:0.25em 0;
+	border:1px solid #BBB;
+	background-color:#F1F2F3;
+	background: #E6EFC2; 
+    border-color: #C6D880; 
+}
+.paging li {padding:0 .5em;}
+ 
+/*------------  Records --------*/
+.record {
+	background-color:white;
+	border:10px solid #E5E7F2; 
+	padding:10px;}
+.record .row { 
+	background-color:#FFF;
+	margin-bottom:10px;
+	padding-bottom:10px;
+	margin-top:10px;
+	}
+.record .row dt {float:left; width:150px; font-weight:bold; text-align:right; border-right:1px solid #FFF; padding-right:10px; }
+ 
+.record .row dd {margin:0; padding:0; margin-left:160px; padding-left:0px; }
+.record h3 {color:#524C7F;}
+
+.record .copyright {
+    font-style: italic; 
+    font-size: 0.9em; 
+    }
+
+/* ---- Forms ------- */
+textarea, input, select {color:#333;}
+textarea {height:150px; width:350px;}
+.edit-form {}
+.search-form, .edit-form {
+	margin: 0;
+	background:#D8DAE4;
+	background:#E9EBF6;
+	position:relative;
+	}
+
+.search-form select {width:150px;}
+fieldset.advancedset select {width:auto;}
+fieldset.searchset input, textarea, input[type="text"] {border:1px solid #BBB;}
+fieldset.searchset input:focus, textarea:focus input[type="text"] {border-color:#666;}
+
+.sort_by_set { margin-left: -12px;}
+.sort_by_set ul li {display:block; }
+.sort_by_set select {width:auto;}
+
+.controlset select {width:140px;}
+li.to_the_left {float:left; display:inline; margin-bottom:4px;}
+.solo {display:block; width:100%;}
+.date select {width:auto;}
+
+/* .search-form li.years select {width:8em;} */
+.search-form label {float:left; width:80px; text-align:right;margin-right:5px; }
+//fieldset {display:block; padding:0.35em 0; margin:1em;}
+fieldset {margin-bottom:10px;}
+fieldset.submitset {padding:5px; width:auto; background-color:#666498; border:1px solid #BBB;}
+fieldset.submitset a {color:#fff;}
+fieldset.searchset {padding-top:10px;}
+fieldset.searchset input, fieldset.advancedset input {width:16em; padding:2px; border:1px solid #BBB;}
+fieldset.editset input, fieldset.editset textarea { width:350px; padding:6px;}
+fieldset.editset textarea.medium { width:350px; padding:6px; height:75px;}
+fieldset.editset textarea.small { width:350px; padding:6px; height:50px;}
+fieldset.editset dt {margin-top:20px; font-weight:bold;}
+.years input {padding:2px; border:1px solid #BBB;}
+ 
+.advancedset ol li { margin:0.50em 0; clear:none; width:100%; display:block;}
+ 
+.submitset ol {float:left; border-left:1px solid #BBB; margin-left:5px; padding-left:5px; line-height:1.0em;}
+.submitset ol li {display:block; font-size:0.916em; margin:0;}
+.submitset input {float:left; margin-right:10px;}
+ 
+label.label_between {width:auto; float:none;margin:0;padding:0 4px;}
+ 
+div.save_search {background-color:#FFFF99;}
+
+ul.search-form-menu li
+    {
+    padding-right:0.5em;
+    }
+
+dl.edit-form dt,dl.edit-form dd {
+    float: left;
+    margin: 5px 0;
+    }
+    
+dl.edit-form dt {
+    clear: left;
+    width: 20%;
+    text-align: left;
+    display: block;
+}
+
+dl.edit-form dd {
+    padding-left: 5px;
+    width: 65%;
+}
+
+dl.genre-list
+{
+width: 41.1em;
+margin: 0;
+padding: 0;
+}
+.genre-list dt
+{
+width: 11em;
+float: left;
+margin: 0 0 0 0;
+padding: .2em 0;
+font-weight: bold;
+}
+
+/* commented backslash hack for mac-ie5 \*/
+dt { clear: both; }
+/* end hack */
+
+.genre-list dd
+{
+float: left;
+width: 24em;
+margin: 0 0 0 0;
+padding: .2em 0;
+}
+
+/*##---- Help Popup styles ----##*/
+.help_popup {padding:20px;}
+.default li {display:block; }
+.help_popup h1, .help_popup h2 {padding-bottom:0.25em; border-bottom:1px dotted #BBB; }
+.help_popup h2 {font-weight:normal; }
+.help_popup a {text-decoration:underline;}
+ 
+hr {width:100%;
+	clear:both;
+	color: #DDD;
+	background-color: #DDD;
+	height: 1px;
+	border:none;
+	}
+ 
+* html hr {margin: 0; margin-bottom:-7px; /* for IE6 */}
+*+html hr {margin: 0; margin-bottom:-7px;/* for IE7 */}
+ 
+/* Success, notice and error boxes  --------------- */
+	.error,
+	.notice, 
+	.success    { padding: .25em; border: 1px solid #ddd; }
+ 
+	.error-message { background: #FBE3E4; color: #8a1f11; border:1px solid #FBC2C4; padding:2px 0 2px 10px;}
+	.notice     { background: #FFF6BF; color: #514721; border-color: #FFD324; }
+	.success    { background: #E6EFC2; color: #264409; border-color: #C6D880; }
+	.error a    { color: #8a1f11; }
+	.notice a   { color: #514721; }
+	.success a  { color: #264409; }
+	
+	.clearfix:after, .brand:after ,.page:after, .row:after {content:".";display:block;height:0;clear:both;visibility:hidden;}
+	.clearfix, .brand, .page, .row
+{display:inline-block;}
+	* html .clearfix, * html .brand ,* html .page, * html .row
+{height:1%;}
+	.clearfix, .brand, .page, .row
+{display:block;}
+	.clear {clear:both;}
+	.form_leftcol, .form_rightcol {padding-top:10px;}
+	.form_leftcol{ float:left;}
+	.form_rightcol {float:right; }

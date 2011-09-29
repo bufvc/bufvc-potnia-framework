@@ -1,0 +1,50 @@
+#! /bin/bash
+# $Id$
+# Convert a latin1 database to utf-8
+# Phil Hansen, 12 Feb 2010
+# BUFVC Potnia copyright 2011, BUFVC et al. See LICENSE for licensing information (GPL3). See http://potnia.org, http://bufvc.ac.uk
+
+basedir=$(cd $(dirname $0)/..;pwd)
+cd $basedir
+
+function usage()
+    {
+    cat << _EOT_
+$(basename $0): Convert a MySQL database from latin1 (ISO-8859-1) to UTF-8
+Usage: $(basename $0) database-name
+_EOT_
+    }
+
+if [ -z $1 ]; then
+    usage
+    exit 2
+fi
+
+DATABASE=$1
+
+# dump old data
+mysqldump -uroot --default-character-set=latin1 -c --insert-ignore --skip-set-charset ${DATABASE} > dump.sql
+
+# perform conversion and change charset values
+lib/iconv_chunks dump.sql -f ISO-8859-1 -t UTF-8 > dump_utf8.sql
+sed -e 's/CHARSET=latin1/CHARSET=utf8/g' dump_utf8.sql > dump_utf8_sed.sql
+mv dump_utf8_sed.sql dump_utf8.sql
+
+# normalise data (use php helper script)
+bin/normalise_sql_data_to_utf8 dump_utf8.sql
+
+# check for remaining latin1 fields
+if grep -qi latin1 dump_utf8.sql; then
+    echo "Error: latin1 still detected in utf8 dump"
+    exit
+fi
+
+# drop and create database
+mysqladmin -uroot -f drop ${DATABASE} &>/dev/null
+mysql -uroot --execute="CREATE DATABASE ${DATABASE} CHARACTER SET utf8 COLLATE utf8_general_ci;" &>/dev/null
+
+# import data
+mysql -uroot --max_allowed_packet=16M --default-character-set=utf8 ${DATABASE} < dump_utf8.sql
+
+# clean up
+rm -f dump.sql dump_utf8.sql

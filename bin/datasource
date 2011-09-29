@@ -1,0 +1,51 @@
+#! /usr/bin/php -q
+<?php
+// $Id$
+// DataSource front end
+// James Fryer 3 June 2011
+// BUFVC Potnia copyright 2011, BUFVC et al. See LICENSE for licensing information (GPL3). See http://potnia.org, http://bufvc.ac.uk
+
+require_once('web/include.php');
+
+$usage = "Usage: datasource [search|retrieve|create|update|delete] item-url\n";
+
+// Get data
+if (@$argv[1] == '-h' || $argc < 3)
+    die($usage);
+$cmd = $argv[1];
+$url = $argv[2];
+//print "$cmd $url\n";
+
+$tmp = explode('/', $url);
+$modname = @$tmp[1];
+$module = Module::load($modname);
+if (is_null($module))
+    die("Unable to load module '$modname'\n");
+    
+$funct = '_cmd_' . $cmd;
+if (!function_exists($funct))
+    die($usage);
+$funct($module, $url, @$argv[3]);
+
+function _cmd_search($module, $url, $arg)
+    {
+    $query = $arg;
+    $r = $module->search($url, $query, 0, 10);
+    if (is_null($r))
+        print json_encode(Array('status'=> $module->error_code, 'message'=> $module->error_message));
+    else {
+        unset($r['module']);
+        print json_encode($r);
+        }
+    }
+
+function _cmd_retrieve($module, $url, $arg)
+    {
+    $r = $module->retrieve($url);
+    if (is_null($r))
+        print json_encode(Array('status'=> $module->error_code, 'message'=> $module->error_message));
+    else {
+        unset($r['module']);
+        print json_encode($r);
+        }
+    }

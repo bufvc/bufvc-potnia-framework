@@ -1,0 +1,36 @@
+/* Hide original fieldset */
+.add-link, .remove-link, .tag-container, .tag-selected, .advanced-menu-options li a {background:url('../components/enhanced-input-sprite.png') no-repeat 0% 0%;}
+
+.fieldset-hidden {display:none;}
+#advanced-controls { margin:0; padding:4px; }
+.enhanced-input {background:#EBEFF5 ; }
+.enhanced-input select { margin:0 5px 0 0px;}
+.enhanced-input { border:1px solid #C3C7CC; margin-right:26%; margin-bottom:5px; padding:6px; position:relative; }
+.advanced-menu-options li.selected a:link, .advanced-menu-options li.selected a:visited { color:#4E8400; }
+.advanced-menu-options li a:hover, .advanced-menu-options li a:focus { color:#25A9E0; text-decoration:underline; }
+.hide-label { position:absolute; left:-99999px; }
+.enhanced-input input { border : 1px solid rgb(180,180,180); padding:0.35em 0.5em; background-color:white; font-size:93%; width:140px; margin-left:4px; }
+.tag-container { background-position:0% -300px; padding-left:10px; font-size:93%; color:#333; }
+.tag-selected {background-position:100% -350px; padding-right:6px; margin-right:-4px; }
+.tag-container, .tag-selected {padding-top:4px; padding-bottom:4px;}
+.advanced-menu-options { margin:10px 0px; }
+.advanced-menu-options li a { float:left; width:170px; font-size:92.31%; padding-left:16px; margin:0.20em 0; }
+.advanced-menu-options li a:link { background-position:0% -100px; color:#333333;}
+.advanced-menu-options li a:hover, .advanced-menu-options li a:focus { background-position:0% -150px; color:#666666;}
+.advanced-menu-options li.selected a:link {background-position:0% -200px;}
+.add-link, .remove-link { float:right; height:24px; padding-right:26px; line-height:2; padding-left:4px; font-size:93%; }
+.add-link:hover, .add-link:focus, .remove-link:hover, .remove-link-focus { color:#4E8400; text-decoration:underline; }
+.add-link:hover, .add-link:focus {background-position:100% -400px; }
+.add-link:active, .remove-link:active { text-decoration:none; }
+.remove-link:hover, .remove-link:focus { background-position:100% -450px; color:#BB0C10;}
+.remove-link {background-position:100% -50px; }
+.add-link { background-position:100% 0px; margin-left:4px;}
+
+/*--- 3px all round corners ----*/
+.enhanced-input, .enhanced-input input { 
+	-o-border-radius:       4px;
+	-moz-border-radius:     4px; 
+	-webkit-border-radius:  4px;
+	-khtml-border-radius:   4px;
+	-ms-border-radius:      4px;
+	border-radius:          4px; }
