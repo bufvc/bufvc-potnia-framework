@@ -15,7 +15,7 @@ $CONF['version'] = '0.1';
 $CONF['enabled'] = 1;
 
 // Email address for system administrator
-$CONF['admin_email'] = 'admin@invocrown.com';
+$CONF['admin_email'] = 'admin@example.com';
 
 // Email address for general enquiries
 $CONF['contact_email'] = $CONF['admin_email'];
@@ -193,11 +193,6 @@ $CONF['url_media'] = $CONF['url'] . '/media';
 // Prefix for View Record title
 //### FIXME: move to strings file
 $CONF['view_record_prefix'] = 'View Record: ';
-
-// External service URLs
-$CONF['url_resources'] = 'http://test.invocrown.com/resources';
-$CONF['url_services'] = 'http://test.invocrown.com/services';
-$CONF['url_playlist_service'] = $CONF['url_services'] . '/playlist';
 
 // Do we want to use Sphinx search?
 $CONF['sphinx'] = 0;
